@@ -6,13 +6,13 @@ const placeEnrichmentCache = new GeoCache(24 * 60 * 60 * 1000, 600)
 const cityGuideCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 const cityLandmarksDiscoveryCache = new GeoCache(24 * 60 * 60 * 1000, 300)
 
-const ICONIC_TOURIST_PARK_KEYWORDS = /\b(ronda|lineal|malec[oó]n|sim[oó]n\s+bol[ií]var|bol[ií]var|principal|central|mayor|nacional|natural|ecol[oó]gico|cultural|bot[aá]nico|arqueol[oó]gico|hist[oó]rico|museo|mirador|centenario|fundadores|santander|nari[nñ]o|caldas|sucre|c[oó]rdoba|del\s+agua|de\s+los\s+novios|de\s+la\s+paz|del\s+r[ií]o|tayrona|esp[ií]ritu\s+del\s+manglar|bicentenario|alameda)\b/i
+const ICONIC_TOURIST_PARK_KEYWORDS = /\b(ronda|lineal|malec[oó]n|sim[oó]n\s+bol[ií]var|bol[ií]var|principal|central|mayor|nacional|natural|regional|metropolitano|ecol[oó]gico|ecoparque|bioparque|recreacional|cultural|bot[aá]nico|arqueol[oó]gico|hist[oó]rico|museo|mirador|centenario|fundadores|santander|nari[nñ]o|caldas|sucre|c[oó]rdoba|olaya|uribe|libertad|banderas|artes|vida|flora|fauna|lago|laguna|reserva|bosque|termales|nevados|consot[aá]|ukumar[ií]|del\s+agua|de\s+los\s+novios|de\s+la\s+paz|del\s+r[ií]o|del\s+caf[eé]|tayrona|esp[ií]ritu\s+del\s+manglar|bicentenario|alameda)\b/i
 
 const NEIGHBORHOOD_PARK_MARKERS = /\b(biosaludable|infantil|polideportivo|cancha|urbanizaci[oó]n|conjunto|etapa|manzana|lote|barrio|comuna|vereda|glorieta|separador|parqueadero|zona\s+verde|circunvalar|\d+\s+con\s+[a-záéíóúñ0-9]+|calle\s+\d+|carrera\s+\d+|cra\.?\s*\d+|cll\.?\s*\d+|las\s+golondrinas|de\s+los\s+sue[nñ]os|balboa|brizalia)\b/i
 
-const HIGH_VALUE_LANDMARK_KEYWORDS = /\b(ronda\s+del|malec[oó]n|muelle\s+tur[ií]stico|muelle|catedral|bas[ií]lica|santuario|museo|monumento|castillo|fuerte|muralla|mirador|pueblito|plaza\s+cultural|pasaje\s+del\s+sol|pasaje\s+comercial|pasaje\s+de\s+las\s+flores|centro\s+hist[oó]rico|puente\s+met[aá]lico|puente\s+segundo\s+centenario|jard[ií]n\s+bot[aá]nico|teatro|palacio|acueducto|telef[eé]rico|acantilado|volc[aá]n|ci[eé]naga|bah[ií]a|isla|playa)\b/i
+const HIGH_VALUE_LANDMARK_KEYWORDS = /\b(ronda\s+del|malec[oó]n|muelle\s+tur[ií]stico|muelle|catedral|bas[ií]lica|santuario|museo|monumento|castillo|fuerte|muralla|mirador|pueblito|plaza\s+cultural|pasaje\s+del\s+sol|pasaje\s+comercial|pasaje\s+de\s+las\s+flores|centro\s+hist[oó]rico|puente\s+met[aá]lico|puente\s+segundo\s+centenario|jard[ií]n\s+bot[aá]nico|bioparque|ecoparque|teatro|palacio|acueducto|telef[eé]rico|acantilado|volc[aá]n|ci[eé]naga|bah[ií]a|isla|playa)\b/i
 
-const LOW_QUALITY_FOOD_MARKERS = /\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|salchipapas?|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|panader[ií]a|reposter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i
+const LOW_QUALITY_FOOD_MARKERS = /\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|salchipapas?|asadero\s+de\s+pollo|pollo\s+broaster|pollo\s+frito|sir\s+pollo|mis\s+carnes|qbano|s[aá]ndwich\s+qbano|tostao'?|cosechas|sr\.?\s*wok|chop\s*suey|submarina|autoservicio|auto\s+servicio|arepas?\s+rellenas?|empanadas?|jugos\s+la\s+jarra|^jugos\b|fruter[ií]a|panader[ií]a|reposter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|cafeter[ií]a\s+y\s+restaurante|restaurante\s+y\s+cafeter[ií]a|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i
 
 function sanitizeVoiceText(text = '') {
   return String(text || '')
@@ -63,7 +63,7 @@ export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted
   if (NEIGHBORHOOD_PARK_MARKERS.test(cleanName)) return true
 
   const mergedTags = { ...(tags || {}) }
-  const hasDedicatedWikidata = Boolean(mergedTags.wikidata || mergedTags['brand:wikidata'])
+  const hasDedicatedWikidata = Boolean(mergedTags.wikidata || mergedTags['brand:wikidata'] || mergedTags.wikipedia)
   if (HIGH_VALUE_LANDMARK_KEYWORDS.test(cleanName)) return false
 
   const isParkNamed = /^(parque|plazoleta|zona\s+recreativa)\b/i.test(cleanName) || String(mergedTags.leisure || '').toLowerCase() === 'park'
@@ -84,15 +84,15 @@ export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted
 export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   const cleanName = String(name || '').trim()
   if (!cleanName) return true
-  if (/\b(comidas?\s+r[aá]pidas?|comodas?\s+rapidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|billares|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
+  if (/\b(comidas?\s+r[aá]pidas?|comodas?\s+rapidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|pollo\s+frito|sir\s+pollo|mis\s+carnes|qbano|s[aá]ndwich\s+qbano|tostao'?|cosechas|sr\.?\s*wok|chop\s*suey|submarina|autoservicio|auto\s+servicio|arepas?\s+rellenas?|empanadas?|jugos\s+la\s+jarra|^jugos\b|fruter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|billares|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|cafeter[ií]a\s+y\s+restaurante|restaurante\s+y\s+cafeter[ií]a|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
     return true
   }
   // Reject religious shrines, monuments, statues, and recreational clubs misclassified as restaurants
-  if (/\b(virgen|santuario|monumento|escultura|estatua|busto|catedral|parroquia|iglesia|capilla|ermita|recreaciones\s+club|club\s+recreativ\w*)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|caf[ée]|bar|parrilla|asador|cocina)\b/i.test(cleanName)) {
+  if (/\b(virgen|santuario|monumento|escultura|estatua|busto|catedral|parroquia|iglesia|capilla|ermita|recreaciones\s+club|club\s+recreativ\w*|club\s+de\s+\w+)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|caf[ée]|bar|parrilla|asador|cocina)\b/i.test(cleanName)) {
     return true
   }
   // Reject non-culinary ambiguous names or neighborhood shops
-  if (/^(?:el\s+progreso|el\s+paye|mi\s+talisman|el\s+vacilon|pollo\s+asado)$/i.test(cleanName)) {
+  if (/^(?:el\s+progreso|el\s+paye|mi\s+talisman|el\s+vacilon|pollo\s+asado|donde\s+juan|cafeteria\s+y\s+restaurante)$/i.test(cleanName)) {
     return true
   }
   // Reject street-address nodes mislabeled as restaurants on OSM (e.g. "Carrera 22", "Transversal 45", "Calle 30")
@@ -106,8 +106,10 @@ export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   if (/\b(panader[ií]a|reposter[ií]a)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|trattoria|gastrobar)\b/i.test(cleanName)) {
     return true
   }
-  const amenity = String(tags?.amenity || '').toLowerCase()
+  const amenity = String(tags?.amenity || tags?.osm_value || tags?.type || '').toLowerCase()
   if (amenity === 'fast_food') return true
+  const geoCats = Array.isArray(tags?.geoapifyCategories) ? tags.geoapifyCategories : []
+  if (geoCats.some(c => String(c || '').toLowerCase().includes('fast_food'))) return true
   return false
 }
 
@@ -117,6 +119,7 @@ export function isGenericFacilityName(rawName = '') {
   if (clean.length < 3) return true
   const genericList = [
     'restaurante', 'restaurant', 'bar', 'café', 'cafe', 'cafetería', 'cafeteria',
+    'cafetería y restaurante', 'cafeteria y restaurante', 'restaurante y cafetería', 'restaurante y cafeteria',
     'comidas rápidas', 'comidas rapidas', 'fast food', 'hotel', 'hostal', 'hostel',
     'posada', 'alojamiento', 'atractivo', 'monumento', 'parque', 'plaza', 'mirador',
     'tienda', 'panadería', 'panaderia', 'kiosko', 'kiosco', 'puesto', 'estadero',
@@ -1638,16 +1641,35 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     }
   }
 
+  function isCandidateHotel(rawItem, name = '') {
+    if (!rawItem) return false
+    if (rawItem?.entityType === 'hotel' || rawItem?.category === 'hotel' || rawItem?.isAccommodationBase === true) return true
+    const type = String(rawItem?.type || rawItem?.providerType || rawItem?.tags?.tourism || rawItem?.tags?.osm_value || '').toLowerCase()
+    if (['hotel', 'hostel', 'guest_house', 'resort', 'motel', 'chalet', 'apartment'].includes(type)) return true
+    return /\b(hotel|hostal|hostel|resort|posada|apartahotel|alojamiento)\b/i.test(name)
+  }
+
+  function isCandidateFood(rawItem, name = '') {
+    if (!rawItem && !name) return false
+    if (rawItem?.entityType === 'restaurant' || rawItem?.category === 'restaurant' || rawItem?.type === 'food' || rawItem?.isRestaurant === true) return true
+    const type = String(rawItem?.type || rawItem?.providerType || rawItem?.tags?.amenity || rawItem?.tags?.osm_value || '').toLowerCase()
+    if (['restaurant', 'fast_food', 'cafe', 'bar', 'pub', 'food_court', 'ice_cream', 'bakery', 'confectionery', 'biergarten'].includes(type)) return true
+    if (isLowQualityOrFastFoodVenue(name, rawItem?.tags)) return true
+    const subcat = inferStopSubcategory({ ...(typeof rawItem === 'object' ? rawItem : {}), name })
+    if (subcat === 'restaurant' || subcat === 'cafe') return true
+    if (/\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich|cevicher|vegetariano|vegano|empanadas?|jugos|autoservicio|comidas?\s+r[aá]pidas?|sir\s+pollo|tostao|frisby|subway)\b/i.test(name)) return true
+    if (restaurants.some(r => arePlaceNamesSemanticallySame(typeof r === 'string' ? r : (r?.name || ''), name, city))) return true
+    return false
+  }
+
   // Deduplicate attractions while preserving order
   const cleanAttractions = []
   for (const raw of attractions) {
+    const rawName = typeof raw === 'string' ? raw : (raw?.name || raw?.nombre || '')
+    if (isCandidateHotel(raw, rawName) || isCandidateFood(raw, rawName)) continue
     const item = enrichWithCoords(raw, 'attraction')
     if (!item) continue
-    const name = item.name
-    const isFood = item.entityType === 'restaurant' || item.category === 'restaurant' ||
-      /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name) ||
-      restaurants.some(r => arePlaceNamesSemanticallySame(typeof r === 'string' ? r : (r?.name || ''), name, city))
-    if (isFood) continue
+    if (isCandidateHotel(item, item.name) || isCandidateFood(item, item.name)) continue
     if (cleanAttractions.some((existing) => arePlaceNamesSemanticallySame(existing.name, item.name, city))) {
       continue
     }
@@ -1664,6 +1686,18 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     cleanRestaurants.push(item)
   }
 
+  // Resolve urban center using passed cityCenter or median of valid attraction coordinates
+  let cityCenter = options.cityCenter
+  if (!cityCenter || !Number.isFinite(Number(cityCenter.latitude)) || !Number.isFinite(Number(cityCenter.longitude))) {
+    const withCoords = cleanAttractions.filter((a) => a.latitude != null && a.longitude != null)
+    if (withCoords.length > 0) {
+      const sortedLats = withCoords.map((a) => a.latitude).sort((x, y) => x - y)
+      const sortedLons = withCoords.map((a) => a.longitude).sort((x, y) => x - y)
+      const mid = Math.floor(withCoords.length / 2)
+      cityCenter = { latitude: sortedLats[mid], longitude: sortedLons[mid] }
+    }
+  }
+
   // If attractions are insufficient to fill all days (4 for 1-day tour, at least 2 per day for multi-day), pull from candidatePool
   const isExpressExpanded = numDays === 1 && Boolean(options.allowExpandedDay || options.isMoreStops)
   const targetAttractionsCount = numDays === 1 ? (isExpressExpanded ? 5 : 4) : numDays * 2
@@ -1673,11 +1707,10 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       if (cleanAttractions.length >= maxAttractionsToPull) break
       const name = typeof raw === 'string' ? raw : (raw?.name || '')
       if (isGenericFacilityName(name)) continue
-      const isFood = raw?.entityType === 'restaurant' || raw?.category === 'restaurant' ||
-        /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name)
-      if (isFood) continue
+      if (isCandidateHotel(raw, name) || isCandidateFood(raw, name)) continue
       const item = enrichWithCoords(raw, 'attraction')
       if (!item) continue
+      if (isCandidateHotel(item, item.name) || isCandidateFood(item, item.name)) continue
       if (cleanAttractions.some((existing) => arePlaceNamesSemanticallySame(existing.name, item.name, city))) continue
       if (cleanRestaurants.some((r) => arePlaceNamesSemanticallySame(r.name, item.name, city))) continue
       if (numDays === 1 && cleanAttractions.length > 0 && !areStopsCompatibleInSameDay(cleanAttractions[0], item, cityCenter, city)) {
@@ -1692,9 +1725,7 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     for (const raw of candidatePool) {
       if (cleanRestaurants.length >= numDays) break
       const name = typeof raw === 'string' ? raw : (raw?.name || '')
-      const isFood = raw?.entityType === 'restaurant' || raw?.category === 'restaurant' ||
-        /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name)
-      if (!isFood) continue
+      if (isCandidateHotel(raw, name) || !isCandidateFood(raw, name)) continue
       const item = enrichWithCoords(raw, 'restaurant')
       if (!item) continue
       if (isLowQualityOrFastFoodVenue(item.name, item.tags)) continue
@@ -1711,18 +1742,6 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     if (isDessertA !== isDessertB) return isDessertA ? 1 : -1
     return 0
   })
-
-  // Resolve urban center using passed cityCenter or median of valid attraction coordinates
-  let cityCenter = options.cityCenter
-  if (!cityCenter || !Number.isFinite(Number(cityCenter.latitude)) || !Number.isFinite(Number(cityCenter.longitude))) {
-    const withCoords = cleanAttractions.filter((a) => a.latitude != null && a.longitude != null)
-    if (withCoords.length > 0) {
-      const sortedLats = withCoords.map((a) => a.latitude).sort((x, y) => x - y)
-      const sortedLons = withCoords.map((a) => a.longitude).sort((x, y) => x - y)
-      const mid = Math.floor(withCoords.length / 2)
-      cityCenter = { latitude: sortedLats[mid], longitude: sortedLons[mid] }
-    }
-  }
 
   const usedIndices = new Set()
   const clusters = []
@@ -1818,11 +1837,9 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     for (let i = 0; i < clusters.length && clusters.length > numDays; i++) {
       if (clusters[i].length !== 1) continue
       const stopA = clusters[i][0]
-      const infoA = inferPlaceMicroSector(stopA, cityCenter, city)
       for (let j = i + 1; j < clusters.length; j++) {
         if (clusters[j].length !== 1) continue
         const stopB = clusters[j][0]
-        const infoB = inferPlaceMicroSector(stopB, cityCenter, city)
         if (areStopsCompatibleInSameDay(stopA, stopB, cityCenter, city)) {
           clusters[i].push(stopB)
           clusters.splice(j, 1)
@@ -1881,18 +1898,24 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
   }
 
   // Density Invariant: Every day of a trip should have at least 2 attractions (or 4-5 for 1-day express tour)
+  // For multi-day trips, only assign globally unused attractions so cross-day deduplication never strips stops and leaves a day empty.
   const minRequiredPerDay = isExpressExpanded ? 5 : (numDays === 1 ? 4 : 2)
+  const globallyAssignedNames = new Set(
+    clusters.slice(0, numDays).flatMap(c => c.map(s => (s?.name || '').toLowerCase())).filter(Boolean)
+  )
   for (let i = 0; i < clusters.length && i < numDays; i++) {
     while (clusters[i].length < minRequiredPerDay && cleanAttractions.length > clusters[i].length) {
       const existingNames = new Set(clusters[i].map(s => (s.name || '').toLowerCase()))
       const partner = cleanAttractions.find(a =>
         a && a.name &&
         !existingNames.has(a.name.toLowerCase()) &&
-        !arePlaceNamesSemanticallySame(clusters[i][0].name, a.name, city) &&
+        !globallyAssignedNames.has(a.name.toLowerCase()) &&
+        !clusters.slice(0, numDays).some(c => c.some(s => arePlaceNamesSemanticallySame(s.name, a.name, city))) &&
         (numDays !== 1 || clusters[i].every(existing => areStopsCompatibleInSameDay(existing, a, cityCenter, city)))
       )
       if (partner) {
         clusters[i].push(partner)
+        globallyAssignedNames.add(partner.name.toLowerCase())
       } else {
         break
       }

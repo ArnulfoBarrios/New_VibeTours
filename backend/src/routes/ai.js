@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText, coastalWikipediaSummary } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, isPlaceInDifferentCity, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, fetchOpenAiChatCompletion, hasActiveLlm, getActiveLlmKey, cleanAndParseJson, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, sanitizeInternalTravelLanguage, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
@@ -34,7 +34,9 @@ import {
   arePlaceNamesSemanticallySame,
   estimateRealisticStopDurationMinutes,
   inferStopSubcategory, clusterStopsIntoCoherentDays, areStopsCompatibleInSameDay, inferPlaceMicroSector,
-  discoverDynamicCityLandmarks
+  discoverDynamicCityLandmarks,
+  isLowQualityOrFastFoodVenue,
+  isNeighborhoodOrMinorPark
 } from '../services/open-tourism-service.js'
 import { searchTomTomPlaces } from '../services/tomtom.js'
 
@@ -193,10 +195,14 @@ export function getPlaceEntityType(placeName) {
   if (!placeName || typeof placeName !== 'string') return 'generic'
   const lower = placeName.toLowerCase()
   if (/\b(museo|museum|galer[íi]a de arte|teatro|monumento|estatua|escultura|castillo|fuerte|muralla|bastion|palacio|puente|bridge)\b/i.test(lower)) return 'cultural'
-  if (/\b(parque|jard[íi]n|jardin|bosque|reserva|sendero|cascada|laguna|lago|mirador|bot[áa]nico|botanico|pueblito|ecoparque|ci[eé]naga)\b/i.test(lower)) return 'park_nature'
+  if (/\b(parque|jard[íi]n|jardin|bosque|reserva|sendero|cascada|laguna|lago|mirador|bot[áa]nico|botanico|pueblito|ecoparque|bioparque|ci[eé]naga|termales|nevado)\b/i.test(lower)) return 'park_nature'
   if (/\b(playa|beach|bah[íi]a|bahia|cala|isla|island|cayo|arrecife|muelle|puerto|piscina|cabo|ensenada|playón)\b/i.test(lower)) return 'beach_coastal'
   if (/\b(catedral|bas[íi]lica|basilica|iglesia|capilla|templo|mezquita|sinagoga|santuario)\b/i.test(lower)) return 'religious'
-  if (/\b(restaurante|restaurant|bistro|caf[ée]|coffee|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|panader[íi]a|pasteler[íi]a|comida|helader[íi]a|parador|kiosko)\b/i.test(lower)) return 'food'
+  if (
+    /\b(restaurante|restaurant|bistro|caf[ée]|cafeter[íi]a|coffee|bar|gastrobar|asador|parrilla|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|comida|helader[íi]a|parador|kiosko|empanadas?|arepas?|jugos|fruter[íi]a|autoservicio|vegetariano|vegano|asadero|pollo|frisby|subway|tostao|crepes|waffles|chop\s*suey|wok)\b/i.test(lower) ||
+    isFoodOrDrinkEstablishment(placeName) ||
+    isLowQualityOrFastFoodVenue(placeName)
+  ) return 'food'
   if (/\b(centro comercial|mall|shopping|plaza comercial|mercado|bazar)\b/i.test(lower)) return 'shopping'
   if (/\b(estadio|coliseo|arena|zool[óo]gico|zoologico|acuario|parque de diversiones|parque tem[áa]tico)\b/i.test(lower)) return 'entertainment_sports'
   if (/\b(paseo|malec[oó]n|malecon|rambla|avenida|bulevar|callej[oó]n|callejon|plaza|plazoleta)\b/i.test(lower)) return 'urban_promenade'
@@ -3930,24 +3936,54 @@ export function buildTourPlanner(input, location = null, places = []) {
 
       const isFoodStop = (p) => {
         if (!p || !p.name) return false
-        const isAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla|puente|bridge)\b/i.test(p.name)
+        const isAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla|puente|bridge|termales|nevado)\b/i.test(p.name)
         if (isAttraction) return false
-        return getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe' || p.type === 'food' || p.isRestaurant === true
+        return (
+          getPlaceEntityType(p.name) === 'food' ||
+          isFoodOrDrinkEstablishment(p.name, p.tags || p.rawTags) ||
+          isLowQualityOrFastFoodVenue(p.name, p.tags || p.rawTags) ||
+          p.category === 'restaurant' ||
+          p.category === 'cafe' ||
+          p.type === 'food' ||
+          p.type === 'restaurant' ||
+          p.entityType === 'restaurant' ||
+          p.isRestaurant === true
+        )
+      }
+
+      const rawPromptLower = String(input?.prompt || '').toLowerCase()
+      const isExplicitlyInUserPrompt = (placeName) => {
+        if (!placeName || !rawPromptLower) return false
+        const k = normalizePlaceKey(placeName)
+        return k.length >= 4 && rawPromptLower.includes(k)
       }
 
       // Invariant: Guarantee all days 1..totalDays exist without gaps and have balanced stops
       const usedNames = new Set(selectedPlaces.map(p => normalizePlaceKey(p.name)))
       const availableAttractions = otherPlaces.filter(p => !isFoodStop(p) && isValidTouristAttraction(p, input))
       const availableRestaurants = [
-        ...otherPlaces.filter(p => isFoodStop(p)),
-        ...candidatePlaces.filter(p => isFoodStop(p) && !selectedPlaces.some(sp => isPlaceMatching(sp.name, p.name)))
+        ...otherPlaces.filter(p => isFoodStop(p) && !isLowQualityOrFastFoodVenue(p.name, p.tags || p.rawTags)),
+        ...candidatePlaces.filter(p => isFoodStop(p) && !isLowQualityOrFastFoodVenue(p.name, p.tags || p.rawTags) && !selectedPlaces.some(sp => isPlaceMatching(sp.name, p.name)))
       ]
 
       for (let d = 1; d <= totalDays; d++) {
         if (!daysMap.has(d)) {
           daysMap.set(d, [])
         }
-        const dayPlaces = daysMap.get(d)
+        let dayPlaces = daysMap.get(d)
+
+        // 0. Strip low-quality/fast-food chains (Subway, Frisby, Sir Pollo, Tostao, Jugos La Jarra, Autoservicio) unless explicitly typed in user prompt, and ensure food stops are marked as restaurant
+        dayPlaces = dayPlaces
+          .filter(p => !isLowQualityOrFastFoodVenue(p.name, p.tags || p.rawTags) || isExplicitlyInUserPrompt(p.name))
+          .map(p => isFoodStop(p) ? { ...p, category: 'restaurant', entityType: 'restaurant', type: 'food', isRestaurant: true } : p)
+
+        // If a day has multiple food stops and fewer than 2 real attractions, keep at most 1 sit-down restaurant so the day is not a list of eateries
+        const preAttractions = dayPlaces.filter(p => !isFoodStop(p))
+        const preFoods = dayPlaces.filter(p => isFoodStop(p))
+        if (!isCoastalIslands && preAttractions.length < 2 && preFoods.length > 1) {
+          dayPlaces = [...preAttractions, preFoods[0]]
+        }
+        daysMap.set(d, dayPlaces)
 
         // 1. Backfill attractions if day is empty or underfilled (< 2 attractions)
         const currentAttractions = dayPlaces.filter(p => !isFoodStop(p))
@@ -5937,6 +5973,15 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
       console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" (${distKm.toFixed(1)} km) por exceder ${maxRadiusKm} km del centro de "${targetCity}"`)
       return false
     }
+    if (!options.isRegional && maxRadiusKm <= 60 && targetCity && isPlaceInDifferentCity(
+      { name: placeName, latitude: lat, longitude: lon, city: options.city, address: options.address, tags: options.tags },
+      targetCity,
+      targetCityCoords.latitude,
+      targetCityCoords.longitude
+    )) {
+      console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" por pertenecer a otro municipio vecino fuera de "${targetCity}"`)
+      return false
+    }
   }
 
   // 2. Mapeo preventivo para atracciones exclusivas de centros urbanos lejanos
@@ -7808,13 +7853,120 @@ export async function collectTourCandidates(input, location) {
     // Fast-path: Si el usuario ya seleccionó paradas específicas en el chat y
     // todas quedaron geocodificadas (o sustituidas por un POI local verificado),
     // retornar directamente ahorrando múltiples llamadas lentas y timeouts a
-    // Overpass/Photon/OpenAI. Nunca devolver una lista parcial: eso hacía que
-    // una parada, y con ella todo un día del itinerario, desapareciera.
+    // Overpass/Photon/OpenAI. Si algún día quedó con menos de 2 atractivos
+    // turísticos reales (ej: solo restaurantes o 1 sola parada), adjuntar el
+    // catálogo verificado del destino como respaldo para que buildTourPlanner
+    // complete cada día con al menos 2 atractivos turísticos reales + 1 restaurante.
     if (geocodedSpecifics.length >= 2 && geocodedSpecifics.length >= mergedSpecifics.length) {
-      console.info(`[collectTourCandidates] Fast-path: Successfully geocoded ${geocodedSpecifics.length}/${mergedSpecifics.length} user selected stops directly. Skipping generic city scrapers.`)
+      const totalRequestedDays = Math.max(
+        1,
+        Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1),
+        ...geocodedSpecifics.map(p => Number(p.dia || p.day || 0))
+      )
+      const isCoastal = isCoastalIslandsTour(input)
+      let hasUnderfilledDay = false
+      if (!isCoastal) {
+        for (let d = 1; d <= totalRequestedDays; d++) {
+          const dayAttractions = geocodedSpecifics.filter(p =>
+            Number(p.dia || p.day || 1) === d &&
+            !p.isRestaurant &&
+            p.category !== 'restaurant' &&
+            p.type !== 'restaurant' &&
+            getPlaceEntityType(p.name) !== 'food' &&
+            !isFoodOrDrinkEstablishment(p.name, p.tags) &&
+            !isLowQualityOrFastFoodVenue(p.name, p.tags)
+          )
+          if (dayAttractions.length < 2) {
+            hasUnderfilledDay = true
+            break
+          }
+        }
+      }
+
+      let backupCatalogPlaces = []
+      if (hasUnderfilledDay && destLat != null && destLon != null) {
+        const activeCatalog = catalog || await getRealDestinationCatalog(city, country, destLat, destLon, {
+          requestedDays: totalRequestedDays,
+          tourType: input.tourType
+        }).catch(() => null)
+        if (activeCatalog) {
+          const usedKeys = new Set(geocodedSpecifics.map(p => normalizePlaceKey(p.name)))
+          for (const item of (activeCatalog.places || [])) {
+            const iName = typeof item === 'string' ? item : item?.name
+            const iLat = Number(item?.latitude ?? item?.lat)
+            const iLon = Number(item?.longitude ?? item?.lon)
+            if (!iName || !Number.isFinite(iLat) || !Number.isFinite(iLon)) continue
+            const k = normalizePlaceKey(iName)
+            if (!k || usedKeys.has(k)) continue
+            if (isFoodOrDrinkEstablishment(iName, item?.tags) || isLowQualityOrFastFoodVenue(iName, item?.tags) || getPlaceEntityType(iName) === 'food') continue
+            if (canonicalDest && !validateCandidateLocation({ ...item, name: iName, latitude: iLat, longitude: iLon }, canonicalDest, geoScope.maxDistanceKm)) continue
+            usedKeys.add(k)
+            backupCatalogPlaces.push({
+              ...item,
+              name: iName,
+              latitude: iLat,
+              longitude: iLon,
+              type: item.type || 'tourism',
+              category: item.category && item.category !== 'requested' ? item.category : 'attraction',
+              entityType: 'attraction',
+              isRestaurant: false,
+              city: item.city || city,
+              country: item.country || country,
+              address: item.address || `${iName}, ${city}`,
+              placeId: item.placeId || item.id || '',
+              coordinateSource: item.coordinateSource || 'osm',
+              coordinatesVerified: true,
+              tags: {
+                ...(item.tags || {}),
+                requested_place: 'false',
+                coordinates_verified: 'true',
+                coordinate_source: item.coordinateSource || 'osm'
+              }
+            })
+          }
+          for (const item of (activeCatalog.restaurants || [])) {
+            const iName = typeof item === 'string' ? item : item?.name
+            const iLat = Number(item?.latitude ?? item?.lat)
+            const iLon = Number(item?.longitude ?? item?.lon)
+            if (!iName || !Number.isFinite(iLat) || !Number.isFinite(iLon)) continue
+            const k = normalizePlaceKey(iName)
+            if (!k || usedKeys.has(k)) continue
+            if (isLowQualityOrFastFoodVenue(iName, item?.tags)) continue
+            if (canonicalDest && !validateCandidateLocation({ ...item, name: iName, latitude: iLat, longitude: iLon }, canonicalDest, geoScope.maxDistanceKm)) continue
+            usedKeys.add(k)
+            backupCatalogPlaces.push({
+              ...item,
+              name: iName,
+              latitude: iLat,
+              longitude: iLon,
+              type: 'food',
+              category: 'restaurant',
+              entityType: 'restaurant',
+              isRestaurant: true,
+              city: item.city || city,
+              country: item.country || country,
+              address: item.address || `${iName}, ${city}`,
+              placeId: item.placeId || item.id || '',
+              coordinateSource: item.coordinateSource || 'osm',
+              coordinatesVerified: true,
+              tags: {
+                ...(item.tags || {}),
+                requested_place: 'false',
+                is_restaurant: 'true',
+                category: 'restaurant',
+                coordinates_verified: 'true',
+                coordinate_source: item.coordinateSource || 'osm'
+              }
+            })
+          }
+        }
+      }
+
+      const combinedFastPath = [...geocodedSpecifics, ...backupCatalogPlaces]
+      console.info(`[collectTourCandidates] Fast-path: Successfully geocoded ${geocodedSpecifics.length}/${mergedSpecifics.length} user selected stops directly (${backupCatalogPlaces.length} backup catalog places attached). Skipping generic city scrapers.`)
       return {
-        rawCount: geocodedSpecifics.length,
-        places: geocodedSpecifics,
+        rawCount: combinedFastPath.length,
+        places: combinedFastPath,
         source: 'user-chat-selected-places'
       }
     }
@@ -8062,7 +8214,14 @@ export async function collectTourCandidates(input, location) {
     : 'synthetic-fallback'
 
   if (geocodedSpecifics.length >= 2 || (geocodedSpecifics.length >= 1 && input.durationDays)) {
-    selected = dedupeByProximity(geocodedSpecifics)
+    const specificKeys = new Set(geocodedSpecifics.map(p => canonicalPlaceKey(p.name, p.city || city)))
+    const remainder = normalizedPool
+      .filter(p => !specificKeys.has(canonicalPlaceKey(p.name, p.city || city)))
+      .map(p => ({
+        ...p,
+        tags: { ...(p.tags || {}), requested_place: 'false' }
+      }))
+    selected = dedupeByProximity([...geocodedSpecifics, ...remainder])
     source = 'chat-confirmed-places'
   } else if (geocodedSpecifics.length > 0) {
     const specificKeys = new Set(geocodedSpecifics.map(p => canonicalPlaceKey(p.name, p.city || city)))
@@ -8248,6 +8407,11 @@ export function isValidTouristAttraction(place, input) {
 
   // 0.000 Bloqueo absoluto de marcas y nombres de alojamiento/hoteles (Crowne Plaza, Dann Carlton, etc.)
   if (isLodgingName(nameLower) || isLodgingCategoryOrGeneric(nameLower) || place.category === 'hotel' || place.tags?.tourism === 'hotel' || place.tags?.tourism === 'hostel' || place.tags?.tourism === 'motel' || place.tags?.tourism === 'guest_house') {
+    return false
+  }
+
+  // 0.0005 Bloqueo de cadenas de comida rápida, cafeterías genéricas y parques barriales menores como atractivo turístico
+  if (isLowQualityOrFastFoodVenue(name, place.tags || place.rawTags) || isNeighborhoodOrMinorPark(name, place.tags || place.rawTags)) {
     return false
   }
 

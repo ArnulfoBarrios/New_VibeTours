@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, cleanLandmarkOrPlaceName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, resolveCanonicalDestination, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor, evaluateTourRequirements } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection, KNOWN_ICONIC_LANDMARKS } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, isPlaceInDifferentCity, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection, KNOWN_ICONIC_LANDMARKS } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
 import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapifyPlaces, searchMapboxPlaces } from './places-resolver.js'
 import { fetchWithProviderRetry } from './provider-http.js'
@@ -598,7 +598,7 @@ export function resolveCoordinatesForPlace(placeName, ...sources) {
 
 async function resolveOsmBackedChatPlace(place, city = '', country = '', selectedHotel = null) {
   const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
-  if (!name || isTemporalOrDurationPhrase(name) || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name)) return null
+  if (!name || isTemporalOrDurationPhrase(name) || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name) || isLowQualityOrFastFoodVenue(name, place?.tags)) return null
 
   // Resolve city centroid for proximity / bounding (supports both fallback centroids and dynamic cities)
   let centerLat = null
@@ -620,7 +620,7 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
     }
   }
 
-  // 1. If place already has verified coordinates, preserve them only if within destination proximity
+  // 1. If place already has verified coordinates, preserve them only if within destination proximity and same city/Voronoi zone
   if (typeof place === 'object' && place?.latitude && place?.longitude && place?.coordinatesVerified) {
     const pLat = Number(place.latitude)
     const pLon = Number(place.longitude)
@@ -628,6 +628,7 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
       const distM = haversineMeters(centerLat, centerLon, pLat, pLon)
       if (distM > 55000) return null
     }
+    if (city && isPlaceInDifferentCity(place, city, centerLat, centerLon)) return null
     return {
       name,
       latitude: pLat,
@@ -641,23 +642,28 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
 
   // 1.5 Check cache first before querying live geocoders
   const cachedPlace = await lookupCachedPlace(name, city).catch(() => null)
-  if (cachedPlace && hasOsmMapRecord(cachedPlace) && isWithinCoastalCorridorBounds(cachedPlace.latitude, cachedPlace.longitude, city)) {
-    if (centerLat != null && centerLon != null) {
-      const distM = haversineMeters(centerLat, centerLon, cachedPlace.latitude, cachedPlace.longitude)
-      if (distM <= 45000) return cachedPlace
-    } else {
-      return cachedPlace
+  if (cachedPlace && hasOsmMapRecord(cachedPlace) && !isLowQualityOrFastFoodVenue(cachedPlace.name || name, cachedPlace.tags) && isWithinCoastalCorridorBounds(cachedPlace.latitude, cachedPlace.longitude, city)) {
+    if (!city || !isPlaceInDifferentCity(cachedPlace, city, centerLat, centerLon)) {
+      if (centerLat != null && centerLon != null) {
+        const distM = haversineMeters(centerLat, centerLon, cachedPlace.latitude, cachedPlace.longitude)
+        if (distM <= 45000) return cachedPlace
+      } else {
+        return cachedPlace
+      }
     }
   }
 
   const query = [name, city, country].filter(Boolean).join(', ')
   const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
-  if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo) && isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) {
-    if (centerLat != null && centerLon != null) {
-      const distM = haversineMeters(centerLat, centerLon, geo.latitude, geo.longitude)
-      if (distM > 45000) return null
+  if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo) && !isLowQualityOrFastFoodVenue(geo.name || name, geo.tags) && isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) {
+    if (!city || !isPlaceInDifferentCity(geo, city, centerLat, centerLon)) {
+      if (centerLat != null && centerLon != null) {
+        const distM = haversineMeters(centerLat, centerLon, geo.latitude, geo.longitude)
+        if (distM <= 45000) return geo
+      } else {
+        return geo
+      }
     }
-    return geo
   }
 
   // OSM may not contain a valid POI even when the unified commercial
@@ -673,7 +679,9 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
     options: { preferCanonical: true }
   }).catch(() => null)
   if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
+      !isLowQualityOrFastFoodVenue(providerGeo.name || name, providerGeo.tags) &&
       isWithinCoastalCorridorBounds(providerGeo.latitude, providerGeo.longitude, city)) {
+    if (city && isPlaceInDifferentCity(providerGeo, city, centerLat, centerLon)) return null
     if (centerLat != null && centerLon != null) {
       const distM = haversineMeters(centerLat, centerLon, providerGeo.latitude, providerGeo.longitude)
       if (distM > 45000) return null
@@ -1170,6 +1178,151 @@ export function ensureCompleteOneDayItineraryText(text, destName = '', realCatal
   return updatedText
 }
 
+export function ensureBalancedMultiDayItineraryText(text, destName = '', realCatalog = null, parsedExtracted = {}, options = {}) {
+  if (!text || typeof text !== 'string' || isCoastalIslandsTour(options)) return text
+
+  const dayBlockRegex = /((?:^|\n)\s*(?:#{1,4}\s*)?D[íi]a\s+(\d+)\s*:[^\n]*\n)([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?D[íi]a\s+\d+\s*:|\n\n¿|$))/gi
+  const matches = [...text.matchAll(dayBlockRegex)]
+  if (matches.length < 2) return text
+
+  const isFoodStop = (name) => {
+    if (!name) return false
+    return isFoodOrDrinkEstablishment(name) ||
+      /\b(restaurante|restaurant|asador|bistro|gastrobar|cevicher|parrilla|comedor|food\s*hall|caim[aá]n\s+del\s+r[ií]o|caf[eé]|panader[íi]a|pasteler[íi]a|helader[íi]a)\b/i.test(name)
+  }
+
+  const normDest = String(destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const catalogAttractions = [
+    ...(realCatalog?.places || []),
+    ...(realCatalog?.candidateCatalog?.places || []),
+    ...(Array.isArray(parsedExtracted?.specificPlaces) ? parsedExtracted.specificPlaces.filter(p => p?.category !== 'restaurant' && p?.entityType !== 'restaurant' && p?.type !== 'food') : []),
+    ...(DESTINATION_ICONIC_LANDMARKS[normDest] || DESTINATION_ICONIC_LANDMARKS[String(destName || '').toLowerCase()] || [])
+  ]
+    .map(p => typeof p === 'string' ? p.trim() : String(p?.name || '').trim())
+    .filter(name => name && !isFoodStop(name) && !isLowQualityOrFastFoodVenue(name) && !isGenericFacilityName(name) && !isNeighborhoodOrMinorPark(name))
+
+  const catalogRestaurants = [
+    ...(realCatalog?.restaurants || []),
+    ...(realCatalog?.candidateCatalog?.restaurants || []),
+    ...(DESTINATION_ICONIC_RESTAURANTS[normDest] || DESTINATION_ICONIC_RESTAURANTS[String(destName || '').toLowerCase()] || [])
+  ]
+    .map(r => typeof r === 'string' ? r.trim() : String(r?.name || '').trim())
+    .filter(name => name && !isLowQualityOrFastFoodVenue(name) && !isGenericFacilityName(name))
+
+  const parsedDays = matches.map(m => {
+    const header = m[1]
+    const dayNum = Number(m[2])
+    const body = m[3]
+    const rawStops = body
+      .split(/\r?\n/)
+      .map(line => itineraryBulletPlaceName(line))
+      .filter(Boolean)
+    return { fullMatch: m[0], header, dayNum, body, rawStops }
+  })
+
+  const globalUsed = []
+  for (const d of parsedDays) {
+    for (const s of d.rawStops) {
+      if (!isLowQualityOrFastFoodVenue(s) && !globalUsed.some(u => arePlaceNamesSemanticallySame(u, s, destName))) {
+        globalUsed.push(s)
+      }
+    }
+  }
+
+  let anyModified = false
+  const updatedDays = parsedDays.map(d => {
+    const hasLowQuality = d.rawStops.some(s => isLowQualityOrFastFoodVenue(s))
+    const validStops = d.rawStops.filter(s => !isLowQualityOrFastFoodVenue(s))
+    const dayAttrs = validStops.filter(s => !isFoodStop(s))
+    const dayFoods = validStops.filter(s => isFoodStop(s))
+
+    const canBackfillAttr = dayAttrs.length < 2 && catalogAttractions.some(ca =>
+      !globalUsed.some(u => arePlaceNamesSemanticallySame(u, ca, destName)) &&
+      !dayAttrs.some(a => arePlaceNamesSemanticallySame(a, ca, destName))
+    )
+    const needsRepair = hasLowQuality || dayAttrs.length === 0 || dayFoods.length >= 2 || canBackfillAttr
+    if (!needsRepair) {
+      return { ...d, finalAttrs: dayAttrs, finalFood: dayFoods[0] || null, modified: false }
+    }
+
+    anyModified = true
+    const finalAttrs = [...dayAttrs]
+    for (const cand of catalogAttractions) {
+      if (finalAttrs.length >= 2) break
+      if (
+        !globalUsed.some(u => arePlaceNamesSemanticallySame(u, cand, destName)) &&
+        !finalAttrs.some(a => arePlaceNamesSemanticallySame(a, cand, destName))
+      ) {
+        finalAttrs.push(cand)
+        globalUsed.push(cand)
+      }
+    }
+
+    let finalFood = dayFoods[0] || null
+    if (!finalFood && catalogRestaurants.length > 0) {
+      const nextRest = catalogRestaurants.find(cr =>
+        !globalUsed.some(u => arePlaceNamesSemanticallySame(u, cr, destName)) &&
+        !finalAttrs.some(a => arePlaceNamesSemanticallySame(a, cr, destName))
+      )
+      if (nextRest) {
+        finalFood = nextRest
+        globalUsed.push(nextRest)
+      }
+    }
+
+    return { ...d, finalAttrs, finalFood, modified: true }
+  })
+
+  if (!anyModified) return text
+
+  let updatedText = text
+  for (const d of updatedDays) {
+    if (!d.modified) continue
+    const stopsList = [...d.finalAttrs, ...(d.finalFood ? [d.finalFood] : [])]
+    if (stopsList.length === 0) continue
+    const newBlock = `${d.header}${stopsList.map(s => ` • ${s}`).join('\n')}`
+    updatedText = updatedText.replace(d.fullMatch, newBlock)
+  }
+
+  if (parsedExtracted && typeof parsedExtracted === 'object') {
+    const rebuiltSpecifics = []
+    for (const d of updatedDays) {
+      const attrs = d.modified ? d.finalAttrs : d.rawStops.filter(s => !isFoodStop(s))
+      const food = d.modified ? d.finalFood : (d.rawStops.find(s => isFoodStop(s)) || null)
+      for (const a of attrs) {
+        const coords = resolveCoordinatesForPlace(a, realCatalog?.coordinatesMap, realCatalog?.candidateCatalog?.places, parsedExtracted.specificPlaces)
+        rebuiltSpecifics.push({
+          name: a,
+          dia: d.dayNum,
+          day: d.dayNum,
+          type: 'cultural',
+          category: 'attraction',
+          entityType: 'attraction',
+          ...(coords || {})
+        })
+      }
+      if (food) {
+        const coords = resolveCoordinatesForPlace(food, realCatalog?.coordinatesMap, realCatalog?.restaurants, parsedExtracted.specificPlaces)
+        rebuiltSpecifics.push({
+          name: food,
+          dia: d.dayNum,
+          day: d.dayNum,
+          type: 'food',
+          category: 'restaurant',
+          entityType: 'restaurant',
+          isRestaurant: true,
+          ...(coords || {})
+        })
+      }
+    }
+    if (rebuiltSpecifics.length > 0) {
+      parsedExtracted.specificPlaces = rebuiltSpecifics
+    }
+  }
+
+  return updatedText
+}
+
 export function getOpenAiModelConfig() {
   const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna'
   const isReasoning = model.includes('luna') || model.includes('o1') || model.includes('o3') || model.includes('sol') || model.includes('terra')
@@ -1607,7 +1760,7 @@ export async function discoverProviderFallbackCandidates({ destination, country,
     ? ['tourism.sights', 'tourism.attraction', 'leisure.park', 'natural']
     : category === 'hotel'
       ? ['accommodation.hotel', 'accommodation.hostel', 'accommodation.guest_house']
-      : ['catering.restaurant', 'catering.cafe', 'catering.fast_food']
+      : ['catering.restaurant', 'catering.cafe', 'catering.bar']
 
   let [mapbox, geoapify] = await Promise.all([
     searchMapboxPlaces({ queries, cityLat: centerLat, cityLon: centerLon, maxDistanceKm: 35 }).catch(() => []),
@@ -1669,7 +1822,7 @@ export function isMalformedItinerary(text) {
       return true
     }
 
-    // 2. Any day header that has zero bullet points or activities before the next day header or end of itinerary
+    // 2. Any day header that has zero bullet points or activities, or only food/fast-food stops with 0 tourist attractions
     for (let i = 0; i < dayHeaderMatches.length; i++) {
       const startIdx = dayHeaderMatches[i].index + dayHeaderMatches[i][0].length
       const endIdx = (i + 1 < dayHeaderMatches.length)
@@ -1681,6 +1834,21 @@ export function isMalformedItinerary(text) {
       const hasTimeLabel = /\b(?:mañana|mediod[íi]a|almuerzo|tarde|noche|\d{1,2}:\d{2})\s*:/i.test(daySlice)
       if (!hasBullet && !hasNumberedStop && !hasTimeLabel) {
         return true
+      }
+
+      const dayStopLines = daySlice
+        .split(/\r?\n/)
+        .map(line => itineraryBulletPlaceName(line))
+        .filter(Boolean)
+      if (dayStopLines.length > 0) {
+        if (dayStopLines.some(stopName => isLowQualityOrFastFoodVenue(stopName))) {
+          return true
+        }
+        const foodCount = dayStopLines.filter(stopName => isFoodOrDrinkEstablishment(stopName)).length
+        const nonFoodCount = dayStopLines.length - foodCount
+        if (nonFoodCount === 0 || foodCount >= 2) {
+          return true
+        }
       }
     }
 
@@ -1699,7 +1867,7 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
   const name = typeof entry === 'string'
     ? entry.trim()
     : String(entry?.name || '').trim()
-  if (!name || isUnmappedOrClosedVenue(name)) return null
+  if (!name || isUnmappedOrClosedVenue(name) || isLowQualityOrFastFoodVenue(name, entry?.tags)) return null
 
   let geo = null
   if (typeof entry === 'object' && Number.isFinite(Number(entry?.latitude)) && Number.isFinite(Number(entry?.longitude)) && entry?.coordinateSource) {
@@ -1760,6 +1928,14 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
   if (!hasOsmMapRecord(geo)) return null
 
   if (!isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) return null
+
+  if (city && isPlaceInDifferentCity(geo, city, centerLat, centerLon)) return null
+
+  if (isLowQualityOrFastFoodVenue(geo.name || name, geo.tags)) return null
+
+  if (category === 'attraction' && isFoodOrDrinkEstablishment(geo.name || name, geo.tags)) {
+    return null
+  }
 
   if (category === 'restaurant' || (typeof entry === 'object' && entry?.specialty)) {
     const geoTags = geo.tags || {}
@@ -2064,7 +2240,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const requestedDays = Math.max(1, Number(options?.requestedDays || options?.numDays || options?.daysCount || 7))
   const coastalIslands = isCoastalIslandsTour(options)
   const cacheMode = coastalIslands ? 'coastal' : 'general'
-  const cacheKey = `catalog_osm_v7_${cacheMode}_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
+  const cacheKey = `catalog_osm_v8_${cacheMode}_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
   const cached = destinationCatalogCache.get(cacheKey)
   const minRequiredPlaces = coastalIslands
     ? Math.max(4, Math.min(6, requestedDays + 1))
@@ -2109,6 +2285,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   if (cachedCityCatalog) {
     if (Array.isArray(cachedCityCatalog.places) && cachedCityCatalog.places.length > 0) {
       for (const p of cachedCityCatalog.places) {
+        if (isFoodOrDrinkEstablishment(p.name, p.tags) || isLowQualityOrFastFoodVenue(p.name, p.tags)) continue
+        if (isPlaceInDifferentCity(p, clean, lat, lon)) continue
         if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
           realPlaces.push(p)
         }
@@ -2116,6 +2294,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
     if (Array.isArray(cachedCityCatalog.restaurants) && cachedCityCatalog.restaurants.length > 0) {
       for (const r of cachedCityCatalog.restaurants) {
+        if (isLowQualityOrFastFoodVenue(r.name, r.tags)) continue
+        if (isPlaceInDifferentCity(r, clean, lat, lon)) continue
         if (!realRests.some(rr => arePlacesSimilar(rr.name, r.name))) {
           realRests.push(r)
         }
@@ -2123,6 +2303,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
     if (Array.isArray(cachedCityCatalog.hotels) && cachedCityCatalog.hotels.length > 0) {
       for (const h of cachedCityCatalog.hotels) {
+        if (isPlaceInDifferentCity(h, clean, lat, lon)) continue
         if (!realHotels.some(rh => arePlacesSimilar(rh.name, h.name))) {
           realHotels.push(h)
         }
@@ -2165,15 +2346,21 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       presetIconics
     )
     realPlaces = mergeCuratedCoastalPlaces(realPlaces, clean)
+    realRests = rankAndFilterTouristRestaurants(realRests)
     if (realPlaces.length >= minRequiredPlaces && realRests.length >= minRequiredRests) {
-      const candidateCatalog = prioritizeCoastalCandidateCatalog(createUnifiedCandidateCatalog({
-        places: realPlaces,
-        restaurants: realRests,
-        hotels: realHotels,
-        events: realEvents,
-        city: capitalCity,
-        country: targetCountry
-      }), clean)
+      const candidateCatalog = prioritizeCoastalCandidateCatalog(await createUnifiedCandidateCatalog({
+        destination: clean,
+        country: targetCountry,
+        centerLat: lat,
+        centerLon: lon,
+        existing: {
+          places: realPlaces,
+          restaurants: realRests,
+          hotels: realHotels
+        },
+        discoverOsm: false,
+        discoverProviders: false
+      }).catch(() => ({ places: realPlaces, restaurants: realRests, hotels: realHotels, all: [...realPlaces, ...realRests, ...realHotels] })), clean)
       const coordinatesMap = {}
       for (const p of candidateCatalog.all || []) {
         if (p?.name && Number.isFinite(p.latitude) && Number.isFinite(p.longitude)) {
@@ -2282,14 +2469,15 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         ? Promise.race([overpassNearbyFood(lat, lon, searchRadiusM, { skipPhotonFallback: coastalIslands }).catch(() => []), timeoutPromise])
         : Promise.resolve([]),
       realPlaces.length < minLandmarksTarget
-        ? Promise.race([overpassAttractions(lat, lon, searchRadiusM, { coastalIslands }).catch(() => []), timeoutPromise])
+        ? Promise.race([overpassAttractions(lat, lon, searchRadiusM, { coastalIslands, city: clean }).catch(() => []), timeoutPromise])
         : Promise.resolve([])
     ])
 
-    const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isGenericFacilityName(h.name) && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
+    const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isGenericFacilityName(h.name) && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano') && !isPlaceInDifferentCity(h, clean, lat, lon)).slice(0, 6)
     const fetchedRests = (osmRests || []).filter(r => {
-      if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isUnmappedOrClosedVenue(r.name)) return false
+      if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isUnmappedOrClosedVenue(r.name) || isLowQualityOrFastFoodVenue(r.name, r.tags)) return false
       if (r.name.toLowerCase().includes('perímetro urbano')) return false
+      if (isPlaceInDifferentCity(r, clean, lat, lon)) return false
       if (r.latitude != null && r.longitude != null) {
         if (!isWithinCoastalCorridorBounds(r.latitude, r.longitude, clean)) return false
         const d = haversineMeters(lat, lon, r.latitude, r.longitude)
@@ -2298,15 +2486,16 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       return true
     }).slice(0, 16)
     const fetchedPlaces = (osmAttractions || []).filter(p => {
-      if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
+      if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name, p.tags) || isLowQualityOrFastFoodVenue(p.name, p.tags) || isUnmappedOrClosedVenue(p.name)) return false
       if (p.name.toLowerCase().includes('perímetro urbano')) return false
+      if (isPlaceInDifferentCity(p, clean, lat, lon)) return false
       if (p.latitude != null && p.longitude != null) {
         if (!isWithinCoastalCorridorBounds(p.latitude, p.longitude, clean)) return false
         const d = haversineMeters(lat, lon, p.latitude, p.longitude)
         if (d > searchRadiusM) return false
       }
       return true
-    }).slice(0, 24)
+    }).slice(0, 32)
 
     if (realHotels.length === 0) realHotels = fetchedHotels
     for (const fr of fetchedRests) {
@@ -2354,7 +2543,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       const photonResults = await Promise.all(
         allSearchQueries.map(q => photonSearch(
           q,
-          6,
+          8,
           lat,
           lon,
           null,
@@ -2364,8 +2553,9 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         ).catch(() => []))
       )
       const additional = photonResults.flat().filter(p => {
-        if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
+        if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name, p.tags) || isLowQualityOrFastFoodVenue(p.name, p.tags) || isNeighborhoodOrMinorPark(p.name, p.tags) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
+        if (isPlaceInDifferentCity(p, clean, lat, lon)) return false
         if (p.latitude != null && p.longitude != null && lat != null && lon != null) {
           if (!isWithinCoastalCorridorBounds(p.latitude, p.longitude, clean)) return false
           const dist = haversineMeters(lat, lon, p.latitude, p.longitude)
@@ -2384,7 +2574,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     if (!coastalIslands && realHotels.length < 3 && lat && lon) {
       const photonHotels = await photonSearch(`hotel ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
       for (const ph of photonHotels) {
-        if (!ph || !ph.name || isGenericFacilityName(ph.name) || isNonTouristFacility(ph.tags) || isNonTouristFacility({ name: ph.name })) continue
+        if (!ph || !ph.name || isGenericFacilityName(ph.name) || isNonTouristFacility(ph.tags) || isNonTouristFacility({ name: ph.name }) || isPlaceInDifferentCity(ph, clean, lat, lon)) continue
         if (!realHotels.some(h => arePlacesSimilar(h.name || h, ph.name))) {
           realHotels.push(ph)
         }
@@ -2406,7 +2596,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
             photonSearch('restaurante', 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
           ])
       for (const pr of [...rests1, ...rests2, ...rests3, ...restsDirect]) {
-        if (!pr || !pr.name || isGenericFacilityName(pr.name) || isNonTouristFacility(pr.tags) || isNonTouristFacility({ name: pr.name }) || isUnmappedOrClosedVenue(pr.name)) continue
+        if (!pr || !pr.name || isGenericFacilityName(pr.name) || isNonTouristFacility(pr.tags) || isNonTouristFacility({ name: pr.name }) || isUnmappedOrClosedVenue(pr.name) || isLowQualityOrFastFoodVenue(pr.name, pr.tags)) continue
+        if (isPlaceInDifferentCity(pr, clean, lat, lon)) continue
         if (!realRests.some(r => arePlacesSimilar(r.name || r, pr.name))) {
           realRests.push(pr)
         }
@@ -2450,6 +2641,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     for (const ef of extraFood) {
       if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name) && !isLowQualityOrFastFoodVenue(ef.name, ef.tags)) {
         if (targetCountry && ef.country && !isCountryMatch(targetCountry, ef.country)) continue
+        if (isPlaceInDifferentCity(ef, clean, lat, lon)) continue
         if (ef.latitude != null && ef.longitude != null) {
           const d = haversineMeters(lat, lon, ef.latitude, ef.longitude)
           if (d > 30000) continue
@@ -2993,7 +3185,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   if (hasCity && !isLocationToDestination) {
     const coastalIslands = isCoastalIslandsTour(known)
     const reqDays = Number(known.durationDays) || 0
-    const cacheKey = `catalog_osm_v7_${coastalIslands ? 'coastal' : 'general'}_${cleanAdministrativeCityName(destName).toLowerCase()}_${(destCountry || '').trim().toLowerCase()}_${reqDays >= 8 ? reqDays : 'std'}`
+    const cacheKey = `catalog_osm_v8_${coastalIslands ? 'coastal' : 'general'}_${cleanAdministrativeCityName(destName).toLowerCase()}_${(destCountry || '').trim().toLowerCase()}_${reqDays >= 8 ? reqDays : 'std'}`
     const cached = destinationCatalogCache.get(cacheKey)
     const minRequiredPlaces = coastalIslands
       ? Math.max(4, Math.min(6, (reqDays || 1) + 1))
@@ -4935,14 +5127,15 @@ REGLAS PARA "accommodationStatus":
       // 1. Recolectar y enriquecer restaurantes para asegurar variedad y cantidad suficiente
       const rawRestsPool = [
         ...(cat?.restaurants || []),
-        ...(parsedExtracted.specificPlaces || []).filter(p => p && (p.type === 'food' || isFoodOrDrinkEstablishment(typeof p === 'string' ? p : p.name))),
-        ...(known.specificPlaces || []).filter(p => p && (p.type === 'food' || isFoodOrDrinkEstablishment(typeof p === 'string' ? p : p.name)))
+        ...(parsedExtracted.specificPlaces || []).filter(p => p && (p.type === 'food' || isFoodOrDrinkEstablishment(typeof p === 'string' ? p : p.name, p.tags))),
+        ...(known.specificPlaces || []).filter(p => p && (p.type === 'food' || isFoodOrDrinkEstablishment(typeof p === 'string' ? p : p.name, p.tags)))
       ]
       const validRests = rawRestsPool.filter(r => {
         const rName = typeof r === 'string' ? r : (r?.name || '')
         if (!rName || rName.trim().length === 0) return false
         if (isCoastalItinerary && !isCoastalMappedTouristStop(r)) return false
-        if (isGenericFacilityName(rName) || isNonTouristFacility({ name: rName }) || isUnmappedOrClosedVenue(rName)) return false
+        if (isGenericFacilityName(rName) || isNonTouristFacility({ name: rName }) || isUnmappedOrClosedVenue(rName) || isLowQualityOrFastFoodVenue(rName, r?.tags)) return false
+        if (typeof r === 'object' && isPlaceInDifferentCity(r, dName, cat?.latitude || known.latitude || null, cat?.longitude || known.longitude || null)) return false
         if (/\b(zool[óo]gico|zoo|acuario|museo|catedral|iglesia|parque|carnaval|estadio)\b/i.test(rName)) return false
         return true
       })
@@ -4961,7 +5154,7 @@ REGLAS PARA "accommodationStatus":
           const hubCat = await getRealDestinationCatalog(hubCity, destCountry).catch(() => null)
           for (const hr of (hubCat?.restaurants || [])) {
             const hrName = typeof hr === 'string' ? hr : (hr?.name || '')
-            if (hrName && !uniqueRests.some(existing => arePlacesSimilar(existing.name, hrName))) {
+            if (hrName && !isLowQualityOrFastFoodVenue(hrName, hr?.tags) && !uniqueRests.some(existing => arePlacesSimilar(existing.name, hrName))) {
               uniqueRests.push(typeof hr === 'string' ? { name: hr } : hr)
             }
           }
@@ -4987,6 +5180,7 @@ REGLAS PARA "accommodationStatus":
           for (const ef of combinedFood) {
             if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility(ef.tags || { name: ef.name }) && !isUnmappedOrClosedVenue(ef.name) && !isLowQualityOrFastFoodVenue(ef.name, ef.tags)) {
               if (destCountry && ef.country && !isCountryMatch(destCountry, ef.country)) continue
+              if (isPlaceInDifferentCity(ef, dName, dLat, dLon)) continue
               if (ef.latitude != null && ef.longitude != null) {
                 if (!isWithinCoastalCorridorBounds(ef.latitude, ef.longitude, dName)) continue
                 const d = haversineMeters(dLat, dLon, ef.latitude, ef.longitude)
@@ -5027,7 +5221,7 @@ REGLAS PARA "accommodationStatus":
         )
         for (const dr of verifiedProfileRestaurants) {
           const drName = typeof dr === 'string' ? dr : (dr?.name || '')
-          if (drName && !isGenericFacilityName(drName) && !isNonTouristFacility({ name: drName }) && !isUnmappedOrClosedVenue(drName)) {
+          if (drName && !isGenericFacilityName(drName) && !isNonTouristFacility({ name: drName }) && !isUnmappedOrClosedVenue(drName) && !isLowQualityOrFastFoodVenue(drName, dr?.tags)) {
             if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, drName))) {
               uniqueRests.push(dr)
               const drLat = Number(dr?.latitude)
@@ -5050,7 +5244,8 @@ REGLAS PARA "accommodationStatus":
       let catPlaces = (cat?.places || []).filter(p => {
         const pName = typeof p === 'string' ? p : (p?.name || '')
         if (isCoastalItinerary && !isCoastalMappedTouristStop(p)) return false
-        if (!pName || isGenericFacilityName(pName) || isUnmappedOrClosedVenue(pName) || isNonTouristFacility({ name: pName }) || isFoodOrDrinkEstablishment(pName) || isLodgingName(pName)) return false
+        if (!pName || isGenericFacilityName(pName) || isUnmappedOrClosedVenue(pName) || isNonTouristFacility({ name: pName }) || isFoodOrDrinkEstablishment(pName, p?.tags) || isLowQualityOrFastFoodVenue(pName, p?.tags) || isLodgingName(pName)) return false
+        if (typeof p === 'object' && isPlaceInDifferentCity(p, dName, cat?.latitude || known.latitude || null, cat?.longitude || known.longitude || null)) return false
         if (uniqueRests.some(r => arePlacesSimilar(r.name, pName))) return false
         return true
       })
@@ -5085,7 +5280,7 @@ REGLAS PARA "accommodationStatus":
         )
         for (const di of verifiedDynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
-          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(typeof cp === 'string' ? cp : cp.name, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
+          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName, di?.tags) && !isLowQualityOrFastFoodVenue(diName, di?.tags) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(typeof cp === 'string' ? cp : cp.name, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
             const diLat = Number(di?.latitude)
             const diLon = Number(di?.longitude)
             if (Number.isFinite(diLat) && Number.isFinite(diLon)) {
@@ -5124,17 +5319,18 @@ REGLAS PARA "accommodationStatus":
           const searchRadiusM = daysCount > 7 ? 55000 : 35000
           const [extraPhoton, extraOverpass] = await Promise.all([
             photonSearch(`turismo ${dName}`, totalPlacesNeeded, dLat, dLon, null, searchRadiusM, destCountry).catch(() => []),
-            overpassAttractions(dLat, dLon, searchRadiusM).catch(() => [])
+            overpassAttractions(dLat, dLon, searchRadiusM, { city: dName }).catch(() => [])
           ])
           const combinedAttractions = [...extraPhoton, ...extraOverpass]
           for (const ea of combinedAttractions) {
             const eaName = ea?.name
-            if (eaName && !isGenericFacilityName(eaName) && !isUnmappedOrClosedVenue(eaName) && !isNonTouristFacility(ea.tags || { name: eaName }) && !isFoodOrDrinkEstablishment(eaName) && !isLodgingName(eaName)) {
+            if (eaName && !isGenericFacilityName(eaName) && !isUnmappedOrClosedVenue(eaName) && !isNonTouristFacility(ea.tags || { name: eaName }) && !isFoodOrDrinkEstablishment(eaName, ea.tags) && !isLowQualityOrFastFoodVenue(eaName, ea.tags) && !isLodgingName(eaName)) {
               // Universal quality filter: reject neighborhood park walkways, drainage corridors, or negative-scored venues
               if (isNeighborhoodOrMinorPark(eaName, ea.tags)) continue
               if (scoreTouristAttraction(ea) < 0) continue
 
               if (destCountry && ea.country && !isCountryMatch(destCountry, ea.country)) continue
+              if (isPlaceInDifferentCity(ea, dName, dLat, dLon)) continue
               if (ea.latitude != null && ea.longitude != null) {
                 if (!isWithinCoastalCorridorBounds(ea.latitude, ea.longitude, dName)) continue
                 const d = haversineMeters(dLat, dLon, ea.latitude, ea.longitude)
@@ -5169,7 +5365,7 @@ REGLAS PARA "accommodationStatus":
       }
 
       let cleanExplicitPool = placeNames.filter(p => {
-        if (!p || isGenericFacilityName(p) || isUnmappedOrClosedVenue(p) || isNonTouristFacility({ name: p }) || isFoodOrDrinkEstablishment(p) || isLodgingName(p)) return false
+        if (!p || isGenericFacilityName(p) || isUnmappedOrClosedVenue(p) || isNonTouristFacility({ name: p }) || isFoodOrDrinkEstablishment(p) || isLowQualityOrFastFoodVenue(p) || isLodgingName(p)) return false
         if (uniqueRests.some(r => arePlacesSimilar(r.name, p))) return false
         return true
       })
@@ -5492,6 +5688,14 @@ REGLAS PARA "accommodationStatus":
         realCatalog,
         parsedExtracted,
         lastUserMsg,
+        { tourType: known.tourType }
+      )
+    } else if (!isLocationToDestination && !isOneDayTour && /(?:^|\n)\s*(?:#{1,4}\s*)?D[íi]a\s*2\b/i.test(responseMessage)) {
+      responseMessage = ensureBalancedMultiDayItineraryText(
+        responseMessage,
+        destName || known.city || known.destination || '',
+        realCatalog,
+        parsedExtracted,
         { tourType: known.tourType }
       )
     }
@@ -7114,7 +7318,18 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
     )
     for (const batch of photonBatches) {
       for (const p of batch) {
-        if (p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name)) {
+        if (
+          p &&
+          p.name &&
+          !isGenericFacilityName(p.name) &&
+          !isNonTouristFacility(p.tags) &&
+          !isNonTouristFacility({ name: p.name }) &&
+          !isFoodOrDrinkEstablishment(p.name, p.tags) &&
+          !isLowQualityOrFastFoodVenue(p.name, p.tags) &&
+          !isNeighborhoodOrMinorPark(p.name, p.tags) &&
+          !isPlaceInDifferentCity(p, clean, lat, lon) &&
+          scoreTouristAttraction(p) >= 0
+        ) {
           if (!combined.some(existing => arePlacesSimilar(existing.name, p.name))) {
             combined.push({
               name: p.name,

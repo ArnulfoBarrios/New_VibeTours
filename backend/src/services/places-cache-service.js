@@ -1,7 +1,8 @@
 import { supabase } from './supabase.js'
 import { GeoCache } from './geoCache.js'
 import { FALLBACK_DESTINATION_CENTROIDS, haversineDistanceKm, getCanonicalDestinationFromCache } from './destinationService.js'
-import { isGenericFacilityName } from './open-tourism-service.js'
+import { isGenericFacilityName, isLowQualityOrFastFoodVenue } from './open-tourism-service.js'
+import { isFoodOrDrinkEstablishment, isPlaceInDifferentCity } from './osm.js'
 
 function resolveCityCentroidForCache(city = '', normCity = '', explicitLat = null, explicitLon = null) {
   if (explicitLat != null && explicitLon != null && Number.isFinite(Number(explicitLat)) && Number.isFinite(Number(explicitLon))) {
@@ -72,13 +73,21 @@ function getMemoryCacheKey(normName, normCity) {
 }
 
 function classifyPlaceCategory(name = '', metadata = {}, explicitCategory = '') {
-  if (explicitCategory) return explicitCategory
-  const metaCategory = metadata?.category || metadata?.type || metadata?.entityType || ''
-  if (metaCategory === 'restaurant' || metaCategory === 'food') return 'restaurant'
-  if (metaCategory === 'hotel' || metaCategory === 'lodging') return 'hotel'
+  const tags = metadata?.tags || metadata || {}
   const lowerName = String(name || '').toLowerCase()
-  if (/\b(hotel|hostal|hostel|resort|posada|caba[ñn]a|suites)\b/i.test(lowerName)) return 'hotel'
-  if (/\b(restaurante|restaurant|bistro|caf[ée]|comida|pizzer[ií]a|parrilla|asador|cevicher[ií]a)\b/i.test(lowerName)) return 'restaurant'
+  const metaCategory = String(metadata?.category || metadata?.type || metadata?.entityType || '').toLowerCase()
+  if (metaCategory === 'hotel' || metaCategory === 'lodging' || /\b(hotel|hostal|hostel|resort|posada|caba[ñn]a|suites)\b/i.test(lowerName)) {
+    return 'hotel'
+  }
+  if (
+    metaCategory === 'restaurant' ||
+    metaCategory === 'food' ||
+    isFoodOrDrinkEstablishment(name, tags) ||
+    isLowQualityOrFastFoodVenue(name, tags)
+  ) {
+    return 'restaurant'
+  }
+  if (explicitCategory) return explicitCategory
   return 'attraction'
 }
 
@@ -98,9 +107,13 @@ export async function lookupCachedPlace(name, city = '') {
   const cacheKey = getMemoryCacheKey(normName, normCity)
   const memHit = placesMemoryCache.get(cacheKey)
   if (memHit) {
+    if (isLowQualityOrFastFoodVenue(memHit.name, memHit.metadata?.tags || memHit.tags)) return null
     if (centroid && Number.isFinite(Number(memHit.latitude)) && Number.isFinite(Number(memHit.longitude))) {
       const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, Number(memHit.latitude), Number(memHit.longitude))
       if (dist > 55) return null
+      if (city && isPlaceInDifferentCity({ ...memHit, tags: memHit.metadata?.tags || memHit.tags || {} }, city, centroid.latitude, centroid.longitude)) {
+        return null
+      }
     }
     return { ...memHit, source: memHit.source || 'cache_memory' }
   }
@@ -119,12 +132,16 @@ export async function lookupCachedPlace(name, city = '') {
 
     const { data, error } = await query.limit(1).maybeSingle()
     if (error || !data) return null
+    if (isLowQualityOrFastFoodVenue(data.name, data.metadata?.tags || {})) return null
 
     const lat = Number(data.latitude)
     const lon = Number(data.longitude)
     if (centroid && Number.isFinite(lat) && Number.isFinite(lon)) {
       const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon)
       if (dist > 55) return null
+      if (city && isPlaceInDifferentCity({ name: data.name, city: data.city, latitude: lat, longitude: lon, tags: data.metadata?.tags || {} }, city, centroid.latitude, centroid.longitude)) {
+        return null
+      }
     }
 
     const cachedPlace = {
@@ -161,24 +178,31 @@ export async function lookupCachedPlacesForCity(city = '', category = null, cent
   if (!normCity) return []
 
   const centroid = resolveCityCentroidForCache(city, normCity, centerLat, centerLon)
-  const filterByCentroid = (list = []) => {
-    if (!centroid) return list
+  const filterByCentroidAndQuality = (list = [], targetCat = null) => {
     return (Array.isArray(list) ? list : []).filter(p => {
+      if (!p || !p.name || isTestOrDummyPlace(p.name) || isGenericFacilityName(p.name)) return false
+      const tags = p.metadata?.tags || p.tags || {}
+      if (isLowQualityOrFastFoodVenue(p.name, tags)) return false
+      if (targetCat === 'attraction' && isFoodOrDrinkEstablishment(p.name, tags)) return false
       const lat = Number(p?.latitude ?? p?.lat)
       const lon = Number(p?.longitude ?? p?.lon)
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
-      return haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) <= 55
+      if (centroid) {
+        if (haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) > 55) return false
+        if (isPlaceInDifferentCity({ ...p, latitude: lat, longitude: lon, tags }, city, centroid.latitude, centroid.longitude)) return false
+      }
+      return true
     })
   }
 
   // Check in-memory city catalog cache first (0 ms)
   const cachedCatalog = cityCatalogMemoryCache.get(normCity)
   if (cachedCatalog) {
-    const validAll = filterByCentroid(cachedCatalog.all || [])
+    const validAll = filterByCentroidAndQuality(cachedCatalog.all || [])
     if (validAll.length > 0 || !centroid) {
-      if (category === 'attraction') return filterByCentroid(cachedCatalog.places || [])
-      if (category === 'restaurant') return filterByCentroid(cachedCatalog.restaurants || [])
-      if (category === 'hotel') return filterByCentroid(cachedCatalog.hotels || [])
+      if (category === 'attraction') return filterByCentroidAndQuality(cachedCatalog.places || [], 'attraction')
+      if (category === 'restaurant') return filterByCentroidAndQuality(cachedCatalog.restaurants || [], 'restaurant')
+      if (category === 'hotel') return filterByCentroidAndQuality(cachedCatalog.hotels || [], 'hotel')
       return validAll
     }
   }
@@ -195,16 +219,22 @@ export async function lookupCachedPlacesForCity(city = '', category = null, cent
 
     if (error || !data || data.length === 0) return []
 
-    const validRows = (centroid
-      ? data.filter(r => {
-          const lat = Number(r.latitude)
-          const lon = Number(r.longitude)
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
-          const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon)
-          return dist <= 55
-        })
-      : data
-    ).filter(r => !isTestOrDummyPlace(r?.name) && !isGenericFacilityName(r?.name))
+    const validRows = data.filter(r => {
+      if (!r?.name || isTestOrDummyPlace(r.name) || isGenericFacilityName(r.name)) return false
+      const tags = r.metadata?.tags || {}
+      if (isLowQualityOrFastFoodVenue(r.name, tags)) return false
+      const lat = Number(r.latitude)
+      const lon = Number(r.longitude)
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+      if (centroid) {
+        const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon)
+        if (dist > 55) return false
+        if (isPlaceInDifferentCity({ name: r.name, city: r.city, latitude: lat, longitude: lon, tags }, city, centroid.latitude, centroid.longitude)) {
+          return false
+        }
+      }
+      return true
+    })
 
     const formatted = validRows.map(row => {
       const placeCategory = classifyPlaceCategory(row.name, row.metadata, row.metadata?.category)
@@ -219,6 +249,7 @@ export async function lookupCachedPlacesForCity(city = '', category = null, cent
         source: `cache_db:${row.source}`,
         confidence: Number(row.confidence ?? 1.0),
         metadata: row.metadata || {},
+        tags: row.metadata?.tags || {},
         category: placeCategory,
         desc: row.metadata?.desc || row.metadata?.description || '',
         stars: String(row.metadata?.stars || '4'),
@@ -228,8 +259,8 @@ export async function lookupCachedPlacesForCity(city = '', category = null, cent
     })
 
     const catalog = {
-      places: formatted.filter(p => p.category === 'attraction'),
-      restaurants: formatted.filter(p => p.category === 'restaurant'),
+      places: formatted.filter(p => p.category === 'attraction' && !isFoodOrDrinkEstablishment(p.name, p.tags)),
+      restaurants: formatted.filter(p => p.category === 'restaurant' && !isLowQualityOrFastFoodVenue(p.name, p.tags)),
       hotels: formatted.filter(p => p.category === 'hotel'),
       all: formatted
     }
@@ -266,16 +297,25 @@ export async function getCachedCityCatalog(city = '', centerLat = null, centerLo
 
   const centroid = resolveCityCentroidForCache(city, normCity, centerLat, centerLon)
   const filterCatalog = (cat) => {
-    if (!cat || !centroid) return cat
-    const within = (p) => {
+    if (!cat) return cat
+    const validItem = (p, role = '') => {
+      if (!p || !p.name || isTestOrDummyPlace(p.name) || isGenericFacilityName(p.name)) return false
+      const tags = p.metadata?.tags || p.tags || {}
+      if (isLowQualityOrFastFoodVenue(p.name, tags)) return false
+      if (role === 'attraction' && isFoodOrDrinkEstablishment(p.name, tags)) return false
       const lat = Number(p?.latitude ?? p?.lat)
       const lon = Number(p?.longitude ?? p?.lon)
-      return Number.isFinite(lat) && Number.isFinite(lon) && haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) <= 55
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+      if (centroid) {
+        if (haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) > 55) return false
+        if (isPlaceInDifferentCity({ ...p, latitude: lat, longitude: lon, tags }, city, centroid.latitude, centroid.longitude)) return false
+      }
+      return true
     }
-    const places = (cat.places || []).filter(within)
-    const restaurants = (cat.restaurants || []).filter(within)
-    const hotels = (cat.hotels || []).filter(within)
-    const all = (cat.all || []).filter(within)
+    const places = (cat.places || []).filter(p => validItem(p, 'attraction'))
+    const restaurants = (cat.restaurants || []).filter(p => validItem(p, 'restaurant'))
+    const hotels = (cat.hotels || []).filter(p => validItem(p, 'hotel'))
+    const all = (cat.all || []).filter(p => validItem(p))
     return { places, restaurants, hotels, all }
   }
 
@@ -308,7 +348,7 @@ export async function saveCachedPlace({
   confidence = 1.0,
   metadata = {}
 }) {
-  if (isTestOrDummyPlace(name)) {
+  if (isTestOrDummyPlace(name) || isGenericFacilityName(name) || isLowQualityOrFastFoodVenue(name, metadata?.tags || metadata)) {
     return false
   }
   const numLat = Number(latitude)
@@ -322,8 +362,13 @@ export async function saveCachedPlace({
   if (!normName) return false
 
   const centroid = resolveCityCentroidForCache(city, normCity)
-  if (centroid && haversineDistanceKm(centroid.latitude, centroid.longitude, numLat, numLon) > 55) {
-    return false
+  if (centroid) {
+    if (haversineDistanceKm(centroid.latitude, centroid.longitude, numLat, numLon) > 55) {
+      return false
+    }
+    if (city && isPlaceInDifferentCity({ name, city, latitude: numLat, longitude: numLon, tags: metadata?.tags || {} }, city, centroid.latitude, centroid.longitude)) {
+      return false
+    }
   }
 
   const placeRecord = {
@@ -386,14 +431,18 @@ export async function saveCachedPlacesBatch(places = [], city = '', defaultSourc
   const records = []
   for (const p of places) {
     const rawName = typeof p === 'string' ? p : (p?.name || p?.nombre || '')
-    if (isTestOrDummyPlace(rawName)) continue
+    const pTags = p?.tags || p?.metadata?.tags || {}
+    if (isTestOrDummyPlace(rawName) || isGenericFacilityName(rawName) || isLowQualityOrFastFoodVenue(rawName, pTags)) continue
     const normName = normalizePlaceNameKey(rawName)
     if (!normName) continue
 
     const lat = Number(p?.latitude ?? p?.lat)
     const lon = Number(p?.longitude ?? p?.lon)
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
-    if (centroid && haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) > 55) continue
+    if (centroid) {
+      if (haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) > 55) continue
+      if (city && isPlaceInDifferentCity({ ...p, name: rawName, latitude: lat, longitude: lon, tags: pTags }, city, centroid.latitude, centroid.longitude)) continue
+    }
 
     const placeCategory = classifyPlaceCategory(rawName, p?.metadata || p, p?.category)
     const record = {
@@ -412,7 +461,7 @@ export async function saveCachedPlacesBatch(places = [], city = '', defaultSourc
         desc: p?.desc || p?.description || '',
         stars: String(p?.stars || ''),
         cuisine: p?.cuisine || '',
-        tags: p?.tags || {},
+        tags: pTags,
         ...(p?.metadata || {})
       }
     }
@@ -430,6 +479,7 @@ export async function saveCachedPlacesBatch(places = [], city = '', defaultSourc
       source: record.source,
       confidence: record.confidence,
       category: placeCategory,
+      tags: pTags,
       coordinatesVerified: true
     })
   }
@@ -456,11 +506,12 @@ export async function saveCachedPlacesBatch(places = [], city = '', defaultSourc
           desc: rec.metadata.desc,
           stars: rec.metadata.stars,
           cuisine: rec.metadata.cuisine,
+          tags: rec.metadata.tags || {},
           coordinatesVerified: true
         }
         existing.all.push(formatted)
-        if (formatted.category === 'attraction') existing.places.push(formatted)
-        else if (formatted.category === 'restaurant') existing.restaurants.push(formatted)
+        if (formatted.category === 'attraction' && !isFoodOrDrinkEstablishment(formatted.name, formatted.tags)) existing.places.push(formatted)
+        else if (formatted.category === 'restaurant' && !isLowQualityOrFastFoodVenue(formatted.name, formatted.tags)) existing.restaurants.push(formatted)
         else if (formatted.category === 'hotel') existing.hotels.push(formatted)
       }
     }

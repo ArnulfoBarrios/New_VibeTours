@@ -321,11 +321,164 @@ export function hasPhysicalAddressPattern(address) {
   return /\b(calle|cll|cra|carrera|kra|av|avenida|diagonal|diag|transversal|transv|autopista|v[íi]a|km|manzana|mz|#|no\.?|con|esquina)\b/i.test(lower)
 }
 
-export function selectBestPoiResult(results, originalQuery = '') {
+const CONURBATION_METRO_GROUPS = [
+  ['pereira', 'dosquebradas', 'santa rosa de cabal'],
+  ['manizales', 'villamaria', 'chinchina'],
+  ['armenia', 'calarca', 'circasia', 'salento', 'filandia', 'montenegro', 'quimbaya'],
+  ['barranquilla', 'soledad', 'puerto colombia', 'galapa'],
+  ['medellin', 'envigado', 'itagui', 'sabaneta', 'bello', 'la estrella', 'copacabana', 'rionegro', 'retiro', 'guatape'],
+  ['bogota', 'chia', 'cajica', 'zipaquira', 'soacha', 'la calera', 'guatavita'],
+  ['cali', 'yumbo', 'jamundi', 'palmira'],
+  ['bucaramanga', 'floridablanca', 'giron', 'piedecuesta'],
+  ['cartagena', 'turbaco'],
+  ['santa marta', 'cienaga'],
+  ['cucuta', 'villa del rosario', 'los patios'],
+  ['tolu', 'santiago de tolu', 'covenas', 'san antero', 'san onofre']
+]
+
+const discoveredCityCentroids = new Map()
+
+export function registerDiscoveredCityCentroid(name, latitude, longitude) {
+  const norm = normalizeCityToken(name)
+  const lat = Number(latitude)
+  const lon = Number(longitude)
+  if (!norm || norm.length < 3 || !Number.isFinite(lat) || !Number.isFinite(lon)) return
+  if (!discoveredCityCentroids.has(norm)) {
+    discoveredCityCentroids.set(norm, { name: norm, latitude: lat, longitude: lon })
+  }
+}
+
+function normalizeCityToken(value = '') {
+  return cleanAdministrativeCityName(String(value || ''))
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(municipio\s+de|distrito\s+de|departamento\s+de|provincia\s+de)\b/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function areCitiesInSameMetroGroup(cityA = '', cityB = '') {
+  const normA = normalizeCityToken(cityA)
+  const normB = normalizeCityToken(cityB)
+  if (!normA || !normB) return false
+  if (normA === normB || normA.includes(normB) || normB.includes(normA)) return true
+  return CONURBATION_METRO_GROUPS.some(group =>
+    group.some(member => normA === member || normA.includes(member)) &&
+    group.some(member => normB === member || normB.includes(member))
+  )
+}
+
+function isRegionalNatureOrExcursionPoi(item = {}) {
+  const name = String(item?.name || item?.tags?.name || '').toLowerCase()
+  const tags = item?.tags && typeof item.tags === 'object' ? item.tags : {}
+  const boundary = String(tags.boundary || '').toLowerCase()
+  const leisure = String(tags.leisure || '').toLowerCase()
+  const natural = String(tags.natural || '').toLowerCase()
+  if (boundary === 'national_park' || boundary === 'protected_area' || leisure === 'nature_reserve') return true
+  if (['waterfall', 'hot_spring', 'volcano', 'peak', 'glacier'].includes(natural)) return true
+  return /\b(parque\s+nacional|parque\s+regional|parque\s+natural|reserva\s+natural|santuario\s+de\s+flora|nevado|volc[aá]n|laguna|termales|bioparque|ecoparque|jard[íi]n\s+bot[aá]nico|cascada|chorros|ca[ñn][oó]n|ukumar[íi]|consot[aá]|ot[uú]n|tayrona|minca|islas?\s+del\s+rosario|bar[uú])\b/i.test(name)
+}
+
+/**
+ * Determines whether a candidate POI belongs to a different/rival city than the target destination
+ * without reducing the search radius for large cities or rural/ecological outskirts.
+ * Combines:
+ * 1) Explicit OSM/Photon municipal tag verification (with conurbation & nature reserve allowances)
+ * 2) Dynamic Voronoi / Rival City Gravity (rejecting POIs that sit inside the urban gravity well
+ *    of another city centroid rather than the target destination).
+ */
+export function isPlaceInDifferentCity(item, targetCity = '', centerLat = null, centerLon = null, nearbyCities = []) {
+  if (!item || typeof item !== 'object') return false
+  const normTarget = normalizeCityToken(targetCity)
+  const tags = item.tags && typeof item.tags === 'object' ? item.tags : {}
+
+  const explicitMunicipality = normalizeCityToken(
+    item.municipality ||
+    tags['addr:city'] ||
+    tags['addr:municipality'] ||
+    tags.city ||
+    tags.town ||
+    tags.municipality ||
+    ''
+  )
+  const stateName = normalizeCityToken(tags.state || tags.county || '')
+  const fallbackItemCity = normalizeCityToken(item.city || '')
+  const candidateCity = explicitMunicipality || (fallbackItemCity && fallbackItemCity !== stateName ? fallbackItemCity : '')
+
+  const isNatureExcursion = isRegionalNatureOrExcursionPoi(item)
+  const pLat = Number(item.latitude ?? item.lat)
+  const pLon = Number(item.longitude ?? item.lon)
+  const cLat = centerLat != null ? Number(centerLat) : null
+  const cLon = centerLon != null ? Number(centerLon) : null
+  const hasCoords = Number.isFinite(pLat) && Number.isFinite(pLon) && Number.isFinite(cLat) && Number.isFinite(cLon)
+  const distToTarget = hasCoords ? haversineMeters(cLat, cLon, pLat, pLon) : null
+
+  // 1. Explicit municipal tag check
+  if (normTarget && candidateCity && !areCitiesInSameMetroGroup(normTarget, candidateCity)) {
+    if (!isNatureExcursion) {
+      return true
+    }
+    // Even for nature excursions, if the explicit city is a known rival city and the POI is near that rival city's urban core, reject it
+    const rivalCentroid = FALLBACK_DESTINATION_CENTROIDS[candidateCity] || discoveredCityCentroids.get(candidateCity)
+    if (rivalCentroid && Number.isFinite(pLat) && Number.isFinite(pLon)) {
+      const distToRivalCore = haversineMeters(rivalCentroid.latitude, rivalCentroid.longitude, pLat, pLon)
+      if (distToRivalCore <= 7500) return true
+    }
+  }
+
+  // 2. Dynamic Voronoi / Rival City Gravity check
+  if (hasCoords && distToTarget > 12000) {
+    const rivalList = []
+    const seenRivals = new Set()
+    const pushRival = (rawName, rLat, rLon) => {
+      if (!Number.isFinite(rLat) || !Number.isFinite(rLon)) return
+      const normRival = normalizeCityToken(rawName)
+      if (!normRival || seenRivals.has(normRival)) return
+      if (normTarget && areCitiesInSameMetroGroup(normTarget, normRival)) return
+      const targetToRival = haversineMeters(cLat, cLon, rLat, rLon)
+      if (targetToRival < 14000) return
+      seenRivals.add(normRival)
+      rivalList.push({ name: normRival, latitude: rLat, longitude: rLon })
+    }
+
+    for (const [cityKey, centroid] of Object.entries(FALLBACK_DESTINATION_CENTROIDS)) {
+      if (!centroid || centroid.isMicroDestination) continue
+      pushRival(centroid.city || cityKey, Number(centroid.latitude), Number(centroid.longitude))
+    }
+    for (const [, centroid] of discoveredCityCentroids.entries()) {
+      pushRival(centroid.name, Number(centroid.latitude), Number(centroid.longitude))
+    }
+    if (Array.isArray(nearbyCities)) {
+      for (const nc of nearbyCities) {
+        if (!nc) continue
+        pushRival(nc.name || nc.city || '', Number(nc.latitude), Number(nc.longitude))
+      }
+    }
+
+    for (const rival of rivalList) {
+      const distToRival = haversineMeters(rival.latitude, rival.longitude, pLat, pLon)
+      // Inside urban core of a rival city (<= 10 km) and significantly closer to rival than target
+      if (distToRival <= 10000 && distToRival < distToTarget * 0.65) {
+        return true
+      }
+      // Within metropolitan ring of a rival city (<= 14 km) for non-nature POIs
+      if (!isNatureExcursion && distToRival <= 14000 && distToRival < distToTarget * 0.55) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+export function selectBestPoiResult(results, originalQuery = '', options = {}) {
   if (!Array.isArray(results) || results.length === 0) return null
   const lowerQuery = String(originalQuery || '').toLowerCase()
   const isExplicitTransitQuery = /\b(estaci[oó]n|bus|metro|subway|parada|transit|train|railway|stop)\b/i.test(lowerQuery)
-  const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lowerQuery)
+  const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lowerQuery) &&
+    !/\b(parque\s+del\s+caf[ée]|museo\s+del\s+caf[ée]|paisaje\s+cultural\s+cafetero|ruta\s+del\s+caf[ée])\b/i.test(lowerQuery)
   const isIslandQuery = /\b(isla|islas|archipi[ée]lago|cayo|cayos)\b/i.test(lowerQuery)
   const isViewpointQuery = /\b(mirador|viewpoint|lookout|belvedere|observatorio)\b/i.test(lowerQuery)
   const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(lowerQuery)
@@ -334,6 +487,21 @@ export function selectBestPoiResult(results, originalQuery = '') {
   const isMonumentQuery = /\b(monumento|monument|escultura|estatua|ventana al mundo|aleta del tibur[oó]n|totem|obelisco)\b/i.test(lowerQuery)
 
   let candidates = [...results]
+
+  const targetCity = options?.city || options?.destination || ''
+  const centerLat = options?.centerLat != null ? Number(options.centerLat) : null
+  const centerLon = options?.centerLon != null ? Number(options.centerLon) : null
+  if (targetCity || (Number.isFinite(centerLat) && Number.isFinite(centerLon))) {
+    const cityFiltered = candidates.filter(r =>
+      !isPlaceInDifferentCity(r, targetCity, centerLat, centerLon, options?.nearbyCities)
+    )
+    if (cityFiltered.length > 0) {
+      candidates = cityFiltered
+    } else if (targetCity) {
+      // All candidates belong to a different city (e.g. Manizales when querying Pereira)
+      return null
+    }
+  }
 
   if (!isExplicitFuelQuery) {
     candidates = candidates.filter(r => {
@@ -461,25 +629,46 @@ export function selectBestPoiResult(results, originalQuery = '') {
   }
 
   // Universal POI selection rule: When the query is NOT asking for dining,
-  // commercial amenities (restaurants, bars, cafes) must not hijack natural or cultural attractions
-  if (!isFoodQuery && candidates.length > 1) {
+  // commercial amenities (restaurants, bars, cafes, fast_food) must not hijack natural or cultural attractions
+  if (!isFoodQuery) {
     const nonFoodCandidates = candidates.filter(r => {
       const type = String(r.type || r.tags?.osm_value || r.osm_value || '').toLowerCase()
       const key = String(r.tags?.osm_key || r.class || r.osm_key || '').toLowerCase()
       const amenity = String(r.tags?.amenity || '').toLowerCase()
-      const name = String(r.name || '').toLowerCase()
-      const isCommercialFood = ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court'].includes(type) ||
+      const name = String(r.name || '')
+      const isCommercialFood = ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court', 'ice_cream', 'bakery'].includes(type) ||
         ['restaurant', 'cafe', 'bar', 'pub', 'fast_food'].includes(key) ||
-        ['restaurant', 'cafe', 'bar', 'pub', 'fast_food'].includes(amenity) ||
-        /\b(restaurante|cafe|cafeter[íi]a|bar|gastrobar)\b/i.test(name)
+        ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court', 'ice_cream'].includes(amenity) ||
+        isFoodOrDrinkEstablishment(name, r.tags) ||
+        isLowQualityOrFastFoodVenue(name, r.tags)
       return !isCommercialFood
     })
     if (nonFoodCandidates.length > 0) {
       candidates = nonFoodCandidates
+    } else if (isParkOrWaterfrontQuery || isMonumentQuery || isMuseumQuery || isReligiousQuery || isViewpointQuery) {
+      return null
     }
   }
 
   if (candidates.length === 0) return null
+
+  // Prioritize candidates matching targetCity and closest to (centerLat, centerLon)
+  if (candidates.length > 1 && (targetCity || (Number.isFinite(centerLat) && Number.isFinite(centerLon)))) {
+    const normTarget = normalizeCityToken(targetCity)
+    candidates = [...candidates].sort((a, b) => {
+      const cityA = normalizeCityToken(a.municipality || a.tags?.city || a.city || '')
+      const cityB = normalizeCityToken(b.municipality || b.tags?.city || b.city || '')
+      const matchA = normTarget && cityA && (cityA === normTarget || cityA.includes(normTarget) || normTarget.includes(cityA)) ? 1 : 0
+      const matchB = normTarget && cityB && (cityB === normTarget || cityB.includes(normTarget) || normTarget.includes(cityB)) ? 1 : 0
+      if (matchA !== matchB) return matchB - matchA
+      if (Number.isFinite(centerLat) && Number.isFinite(centerLon)) {
+        const dA = haversineMeters(centerLat, centerLon, Number(a.latitude), Number(a.longitude))
+        const dB = haversineMeters(centerLat, centerLon, Number(b.latitude), Number(b.longitude))
+        if (Math.abs(dA - dB) > 2500) return dA - dB
+      }
+      return 0
+    })
+  }
 
   if (isViewpointQuery && candidates.length > 1) {
     const directViewpointMatch = candidates.find(r => {
@@ -1149,6 +1338,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   }
 
   // 3. Photon Search with Bounding Box & Proximity Bias
+  const optCity = options?.city || options?.destination || ''
   for (const qc of queryCandidates) {
     try {
       const proxResults = await photonSearch(
@@ -1158,13 +1348,20 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
         centerLon,
         regionalBbox ? regionalBbox.photonBbox : null
       )
-      const photonProx = selectBestPoiResult(proxResults, lookupQuery)
+      const photonProx = selectBestPoiResult(proxResults, lookupQuery, {
+        city: optCity,
+        centerLat,
+        centerLon,
+        nearbyCities: options?.nearbyCities
+      })
       if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
         const dMeters = (centerLat != null && centerLon != null)
           ? haversineMeters(centerLat, centerLon, photonProx.latitude, photonProx.longitude)
           : 0
-        const optCity = options?.city || options?.destination || ''
         if (!isWithinCoastalCorridorBounds(photonProx.latitude, photonProx.longitude, optCity || lookupQuery)) {
+          continue
+        }
+        if (isPlaceInDifferentCity(photonProx, optCity, centerLat, centerLon, options?.nearbyCities)) {
           continue
         }
         if (centerLat == null || dMeters <= maxDistanceMeters) {
@@ -1173,6 +1370,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             latitude: Number(photonProx.latitude),
             longitude: Number(photonProx.longitude),
             city: resolveCityFromPhoton(photonProx),
+            municipality: photonProx.municipality || '',
             country: photonProx.country || '',
             address: photonProx.address || '',
             placeId: photonProx.placeId || photonProx.place_id || '',
@@ -1181,6 +1379,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             coordinate_source: 'photon',
             coordinatesVerified: true,
             coordinates_verified: true,
+            tags: photonProx.tags || {}
           }
           geocodeCache.set(key, res)
           return res
@@ -1196,13 +1395,22 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
     try {
       for (const qc of queryCandidates) {
         const globalResults = await photonSearch(qc, 5, null, null, null)
-        const photonGlobal = selectBestPoiResult(globalResults, lookupQuery)
+        const photonGlobal = selectBestPoiResult(globalResults, lookupQuery, {
+          city: optCity,
+          centerLat,
+          centerLon,
+          nearbyCities: options?.nearbyCities
+        })
         if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
+          if (optCity && isPlaceInDifferentCity(photonGlobal, optCity, centerLat, centerLon, options?.nearbyCities)) {
+            continue
+          }
           const res = {
             name: photonGlobal.name,
             latitude: Number(photonGlobal.latitude),
             longitude: Number(photonGlobal.longitude),
             city: resolveCityFromPhoton(photonGlobal),
+            municipality: photonGlobal.municipality || '',
             country: photonGlobal.country || '',
             address: photonGlobal.address || '',
             placeId: photonGlobal.placeId || photonGlobal.place_id || '',
@@ -1211,6 +1419,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             coordinate_source: 'photon',
             coordinatesVerified: true,
             coordinates_verified: true,
+            tags: photonGlobal.tags || {}
           }
           geocodeCache.set(key, res)
           return res
@@ -1272,7 +1481,8 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             const isUtility = ['waste_disposal', 'vending_machine', 'atm', 'car_wash', 'toilet', 'bench'].includes(type)
             if (isUtility) return false
 
-            const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lookupQuery)
+            const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lookupQuery) &&
+              !/\b(parque\s+del\s+caf[ée]|museo\s+del\s+caf[ée]|paisaje\s+cultural\s+cafetero|ruta\s+del\s+caf[ée])\b/i.test(lookupQuery)
             if (isFoodQuery) {
               const isAccommodation = ['chalet', 'hotel', 'guest_house', 'motel', 'hostel', 'camp_site'].includes(type) ||
                 category === 'tourism' && ['chalet', 'hotel', 'guest_house', 'motel', 'hostel', 'camp_site'].includes(type)
@@ -1294,13 +1504,25 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 
             const isAddressQuery = hasPhysicalAddressPattern(lookupQuery) || hasPhysicalAddressPattern(nq)
             if (lookupQuery && !isAddressQuery && !isDistinctNameMatch(lookupQuery, r.display_name || r.name || '')) return false
+
+            const rAddress = r.address || {}
+            const rExplicitCity = cleanAdministrativeCityName(rAddress.city || rAddress.town || rAddress.municipality || '')
+            if (optCity && isPlaceInDifferentCity({
+              name: r.name || r.display_name || '',
+              latitude: Number(r.lat),
+              longitude: Number(r.lon),
+              municipality: rExplicitCity,
+              city: rExplicitCity,
+              tags: { ...rAddress, boundary: category === 'boundary' ? type : '', leisure: category === 'leisure' ? type : '' }
+            }, optCity, centerLat, centerLon, options?.nearbyCities)) {
+              return false
+            }
             return true
           })
 
           if (validResult) {
             const rLat = Number(validResult.lat)
             const rLon = Number(validResult.lon)
-            const optCity = options?.city || options?.destination || ''
             if (!isWithinCoastalCorridorBounds(rLat, rLon, optCity || lookupQuery)) {
               continue
             }
@@ -1385,6 +1607,9 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
     if (centerLat != null && centerLon != null) {
       const dist = haversineMeters(centerLat, centerLon, fallbackLandmarkMatch.latitude, fallbackLandmarkMatch.longitude)
       isValidInRegion = dist <= maxDistanceMeters
+    }
+    if (isValidInRegion && optCity && isPlaceInDifferentCity(fallbackLandmarkMatch, optCity, centerLat, centerLon)) {
+      isValidInRegion = false
     }
     if (isValidInRegion) {
       const verified = withVerifiedCoordinates({
@@ -1487,9 +1712,12 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
       const osmType = properties.osm_type || ''
       const osmId = properties.osm_id || ''
       const providerId = osmType && osmId ? `${osmType}/${osmId}` : ''
+      const explicitCity = cleanAdministrativeCityName(properties.city || properties.town || properties.municipality || properties.locality || '')
+      const fallbackState = cleanAdministrativeCityName(properties.state || properties.county || '')
       return {
         name: properties.name ?? properties.city ?? query,
-        city: cleanAdministrativeCityName(properties.city || properties.state || ''),
+        city: explicitCity || fallbackState,
+        municipality: explicitCity,
         country: properties.country,
         address: [properties.street, properties.housenumber].filter(Boolean).join(' '),
         latitude: feature.geometry.coordinates[1],
@@ -1620,11 +1848,12 @@ async function fetchOverpassWithMirrors(query, timeoutMs = 4000, options = {}) {
 
 export async function overpassAttractions(latitude, longitude, radius = 8000, options = {}) {
   const coastalIslands = options?.coastalIslands === true
+  const targetCity = options?.city || options?.destination || ''
   const effectiveRadius = coastalIslands
     ? 65000
-    : Math.min(Math.max(radius, 8000), 15000)
-  const parkRadius = Math.min(effectiveRadius, 9000)
-  const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}`
+    : Math.min(Math.max(radius, 8000), 45000)
+  const parkRadius = Math.min(effectiveRadius, 20000)
+  const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}_${normalizeCityToken(targetCity)}`
   const cached = attractionsCache.get(cacheKey)
   if (cached) {
     return cached
@@ -1632,32 +1861,52 @@ export async function overpassAttractions(latitude, longitude, radius = 8000, op
 
   const query = `
     [out:json][timeout:8];
+    node(around:${Math.max(effectiveRadius + 10000, 50000)},${latitude},${longitude})["place"~"city|town"]["name"]->.cities;
+    .cities out body 35;
     (
       nwr(around:${effectiveRadius},${latitude},${longitude})["tourism"~"attraction|museum|viewpoint|gallery|theme_park|zoo|aquarium|artwork"]["name"];
       ${coastalIslands ? `nwr(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|island|islet"]["name"];
-      nwr(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"]["name"];` : ''}
+      nwr(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"]["name"];` : `nwr(around:${effectiveRadius},${latitude},${longitude})["natural"~"waterfall|hot_spring|peak|volcano"]["name"];
+      nwr(around:${effectiveRadius},${latitude},${longitude})["boundary"~"national_park|protected_area"]["name"];`}
       nwr(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"]["name"];
       nwr(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|theatre|ferry_terminal"]["name"];
+      nwr(around:${parkRadius},${latitude},${longitude})["place"="square"]["name"];
       nwr(around:${parkRadius},${latitude},${longitude})["man_made"="pier"]["name"];
       nwr(around:${parkRadius},${latitude},${longitude})["leisure"~"park|nature_reserve|garden"]["name"];
     );
-    out center tags 120;
+    out center tags 180;
   `
   try {
     const json = coastalIslands
       ? await fetchOverpassWithMirrors(query, 3500, { parallelFallbacks: true })
       : await fetchOverpassWithMirrors(query, 4500)
     let results = []
+    const dynamicNearbyCities = Array.isArray(options?.nearbyCities) ? [...options.nearbyCities] : []
     if (json && json.elements) {
+      for (const el of json.elements) {
+        const placeVal = String(el.tags?.place || '').toLowerCase()
+        if ((placeVal === 'city' || placeVal === 'town') && el.tags?.name && Number.isFinite(el.lat) && Number.isFinite(el.lon)) {
+          registerDiscoveredCityCentroid(el.tags.name, el.lat, el.lon)
+          dynamicNearbyCities.push({ name: el.tags.name, latitude: el.lat, longitude: el.lon })
+        }
+      }
+
       const mapped = json.elements
         .map((element) => {
+          const placeVal = String(element.tags?.place || '').toLowerCase()
+          if (placeVal === 'city' || placeVal === 'town') return null
           const lat = element.lat ?? element.center?.lat
           const lon = element.lon ?? element.center?.lon
           const name = element.tags?.name
           const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? element.tags?.leisure ?? element.tags?.sport ?? element.tags?.natural ?? element.tags?.place ?? element.tags?.boundary ?? 'place'
           if (lat == null || lon == null || !name) return null
-          if (isAccommodation(type) || isNonTouristFacility(element.tags) || isFoodOrDrinkEstablishment(name)) return null
-          return {
+          if (
+            isAccommodation(type) ||
+            isNonTouristFacility(element.tags) ||
+            isFoodOrDrinkEstablishment(name, element.tags) ||
+            isLowQualityOrFastFoodVenue(name, element.tags)
+          ) return null
+          const item = {
             id: `${element.type}/${element.id}`,
             name,
             latitude: lat,
@@ -1672,10 +1921,12 @@ export async function overpassAttractions(latitude, longitude, radius = 8000, op
             coordinates_verified: true,
             tags: element.tags
           }
+          if (isPlaceInDifferentCity(item, targetCity, latitude, longitude, dynamicNearbyCities)) return null
+          return item
         })
         .filter(Boolean)
 
-      results = rankAndFilterTouristAttractions(mapped).slice(0, 60)
+      results = rankAndFilterTouristAttractions(mapped).slice(0, 80)
     }
 
     if (results.length === 0) {
@@ -1705,7 +1956,16 @@ export async function overpassAttractions(latitude, longitude, radius = 8000, op
       const seen = new Set()
       const rawFallback = []
       for (const item of combined) {
-        if (!item || !item.name || isGenericFacilityName(item.name) || isNonTouristFacility(item.tags) || isNonTouristFacility({ name: item.name }) || isFoodOrDrinkEstablishment(item.name)) continue
+        if (
+          !item ||
+          !item.name ||
+          isGenericFacilityName(item.name) ||
+          isNonTouristFacility(item.tags) ||
+          isNonTouristFacility({ name: item.name }) ||
+          isFoodOrDrinkEstablishment(item.name, item.tags) ||
+          isLowQualityOrFastFoodVenue(item.name, item.tags) ||
+          isPlaceInDifferentCity(item, targetCity, latitude, longitude, dynamicNearbyCities)
+        ) continue
         const k = item.name.toLowerCase().trim()
         if (!seen.has(k)) {
           seen.add(k)
@@ -1741,20 +2001,25 @@ export async function overpassAttractions(latitude, longitude, radius = 8000, op
 }
 
 export async function overpassNearbyCities(latitude, longitude, radius = 100000) {
+  const cacheKey = `nearby_cities_${Number(latitude).toFixed(2)}_${Number(longitude).toFixed(2)}_${radius}`
+  const cached = citiesCache.get(cacheKey)
+  if (cached) return cached
+
   const query = `
-    [out:json][timeout:25];
+    [out:json][timeout:10];
     (
-      node(around:${radius},${latitude},${longitude})["place"~"city|town"]["wikipedia"];
+      node(around:${radius},${latitude},${longitude})["place"~"city|town"]["name"];
     );
-    out center tags 15;
+    out center tags 35;
   `
   try {
     const json = await fetchOverpassWithMirrors(query, 3500)
     if (!json) return []
-    return (json.elements ?? [])
+    const cities = (json.elements ?? [])
       .map((element) => {
         const name = element.tags?.name
-        if (!name) return null
+        if (!name || !Number.isFinite(element.lat) || !Number.isFinite(element.lon)) return null
+        registerDiscoveredCityCentroid(name, element.lat, element.lon)
         return {
           name,
           latitude: element.lat,
@@ -1762,6 +2027,10 @@ export async function overpassNearbyCities(latitude, longitude, radius = 100000)
         }
       })
       .filter(Boolean)
+    if (cities.length > 0) {
+      citiesCache.set(cacheKey, cities)
+    }
+    return cities
   } catch (error) {
     console.error('[osm] overpassNearbyCities error:', error.message)
     return []
@@ -1785,9 +2054,10 @@ function classifyAttraction(tags = {}) {
   if (['sports_centre', 'stadium', 'pitch', 'track', 'fitness_centre'].includes(leisure) || sport) return 'sports'
   if (
     ['park', 'garden', 'nature_reserve', 'forest'].includes(leisure) || 
-    ['tree', 'wood', 'grassland', 'beach', 'water'].includes(natural) ||
+    ['tree', 'wood', 'grassland', 'beach', 'water', 'waterfall', 'hot_spring', 'peak', 'volcano'].includes(natural) ||
     place === 'island' ||
-    boundary === 'national_park'
+    boundary === 'national_park' ||
+    boundary === 'protected_area'
   ) return 'nature'
   if (['restaurant', 'cafe', 'food_court', 'pub', 'bar', 'nightclub'].includes(amenity)) return amenity
   if (['cathedral', 'church', 'temple', 'mosque'].includes(historic)) return 'religious'
@@ -1809,13 +2079,37 @@ function isAccommodation(type) {
 
 
 
-export function isFoodOrDrinkEstablishment(name = '') {
+export function isFoodOrDrinkEstablishment(nameOrObj = '', tags = {}) {
+  const name = typeof nameOrObj === 'string'
+    ? nameOrObj
+    : String(nameOrObj?.name || nameOrObj?.nombre || '')
+  const mergedTags = (typeof nameOrObj === 'object' && nameOrObj !== null)
+    ? { ...(nameOrObj.tags || {}), ...tags }
+    : (tags || {})
+
+  const osmVal = String(mergedTags.osm_value || mergedTags.amenity || (typeof nameOrObj === 'object' ? nameOrObj?.type : '') || '').toLowerCase()
+  const osmKey = String(mergedTags.osm_key || '').toLowerCase()
+  if (['restaurant', 'fast_food', 'cafe', 'bar', 'pub', 'food_court', 'ice_cream', 'biergarten', 'bakery', 'confectionery'].includes(osmVal)) {
+    return true
+  }
+  if (osmKey === 'amenity' && ['restaurant', 'fast_food', 'cafe', 'bar', 'pub', 'food_court', 'ice_cream', 'biergarten'].includes(String(mergedTags.osm_value || '').toLowerCase())) {
+    return true
+  }
+
   if (!name || typeof name !== 'string') return false
   const clean = name.trim().toLowerCase()
   const unaccented = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   if (/\b(paradero|buseta|busetas|cootrans|cooptrans|despacho\s+de\s+buses|patio\s+de\s+buses|terminal\s+de\s+transporte)\b/i.test(unaccented)) return false
-  if (/\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|parrilla|asador|asados|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera|trattoria|steakhouse|saz[oó]n|fog[oó]n|dulcer[íi]a)\b/i.test(clean)) return true
-  if (/\b(cucayo|varadero|narcobollo|nena\s+lela|donde\s+chucho|ouzo|burukuka|celele|cande|(?:la\s+)?cevicheria|(?:el\s+)?caiman\s+del\s+rio|(?:la\s+)?herradura|donde\s+valerio|kiosko\s+el\s+pescador|(?:el\s+)?montanero)\b/i.test(unaccented)) return true
+
+  // Protect cultural/ecological landmarks whose names mention "Café" or "Cacao" (e.g. Parque del Café, Museo del Café, Paisaje Cultural Cafetero)
+  const isStrictTouristLandmark = /\b(parque|museo|mirador|monumento|catedral|iglesia|bas[íi]lica|santuario|bioparque|ecoparque|reserva|jard[íi]n|plaza|plazoleta|teatro|nevado|volc[aá]n|laguna|termales|paisaje\s+cultural|telef[ée]rico|cable\s+a[ée]reo|viaducto|puente)\b/i.test(clean) &&
+    !/\b(restaurante|restaurant|cafeter[íi]a|parrilla|asador|pizzer[íi]a|gastrobar|autoservicio|frisby|subway|burger|kfc|mcdonald|comidas\s+r[aá]pidas|panader[íi]a|pasteler[íi]a|helader[íi]a|empanadas|arepas|sir\s+pollo|tostao|chop\s+suey|submarina)\b/i.test(clean)
+  if (isStrictTouristLandmark) return false
+
+  if (isLowQualityOrFastFoodVenue(name, mergedTags)) return true
+
+  if (/\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|parrilla|asador|asados|asadero|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera|trattoria|steakhouse|saz[oó]n|fog[oó]n|dulcer[íi]a|autoservicio|empanadas?|arepas?|jugos|fruter[íi]a|broaster|salchipapas)\b/i.test(clean)) return true
+  if (/\b(frisby|subway|sir\s+pollo|tostao|cosechas|chop\s+suey|sr\s*wok|submarina|qbano|kfc|mcdonald|el\s+corral|presto|kokoriko|crepes\s*&\s*waffles|juan\s+valdez|starbucks|dunkin|cucayo|varadero|narcobollo|nena\s+lela|donde\s+chucho|ouzo|burukuka|celele|cande|(?:la\s+)?cevicheria|(?:el\s+)?caiman\s+del\s+rio|(?:la\s+)?herradura|donde\s+valerio|kiosko\s+el\s+pescador|(?:el\s+)?montanero)\b/i.test(unaccented)) return true
   return false
 }
 

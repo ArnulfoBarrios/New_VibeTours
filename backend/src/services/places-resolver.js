@@ -1,5 +1,5 @@
 import { lookupCachedPlace, saveCachedPlace, normalizePlaceNameKey } from './places-cache-service.js'
-import { geocodePlace, isDistinctNameMatch, matchIconicLandmark, normalizeGeocodeQuery } from './osm.js'
+import { geocodePlace, isDistinctNameMatch, isPlaceInDifferentCity, matchIconicLandmark, normalizeGeocodeQuery } from './osm.js'
 import { haversineDistanceKm, cleanAdministrativeCityName } from './destinationService.js'
 import { fetchWithProviderRetry } from './provider-http.js'
 
@@ -175,7 +175,7 @@ export async function resolveProviderDestinationCenter({ destination = '', count
 /**
  * Queries Mapbox Geocoding & Search API.
  */
-async function queryMapboxGeocoding({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
+async function queryMapboxGeocoding({ query, expectedName = '', city = '', cityLat, cityLon, maxDistanceKm }) {
   const token = process.env.MAPBOX_ACCESS_TOKEN?.trim()
   if (!token) return null
 
@@ -218,9 +218,24 @@ async function queryMapboxGeocoding({ query, expectedName = '', cityLat, cityLon
         if (expectedName && !isDistinctNameMatch(expectedName, featName) && !isDistinctNameMatch(expectedName, feat.place_name || '')) {
           continue
         }
+
+        const context = Array.isArray(feat.context) ? feat.context : []
+        const cityContext = context.find(item => ['place', 'locality', 'municipality'].includes(String(item.id || '').split('.')[0]))
+        const providerCity = cityContext?.text || ''
+        if (city && (maxDistanceKm == null || maxDistanceKm <= 60) && isPlaceInDifferentCity({
+          name: featName,
+          city: providerCity,
+          address: feat.place_name || '',
+          latitude: Number(lat),
+          longitude: Number(lon)
+        }, city, cityLat, cityLon)) {
+          continue
+        }
+
         return {
           name: featName,
           address: feat.place_name || '',
+          city: providerCity,
           latitude: Number(lat),
           longitude: Number(lon),
           placeId: `mapbox:${feat.id || ''}`,
@@ -244,7 +259,7 @@ async function queryMapboxGeocoding({ query, expectedName = '', cityLat, cityLon
 /**
  * Queries TomTom Search POI & Geocoding API.
  */
-async function queryTomTomGeocoding({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
+async function queryTomTomGeocoding({ query, expectedName = '', city = '', cityLat, cityLon, maxDistanceKm }) {
   const apiKey = process.env.TOMTOM_API_KEY?.trim()
   if (!apiKey) return null
 
@@ -277,9 +292,21 @@ async function queryTomTomGeocoding({ query, expectedName = '', cityLat, cityLon
           continue
         }
 
+        const providerCity = item.address?.municipality || item.address?.localName || ''
+        if (city && (maxDistanceKm == null || maxDistanceKm <= 60) && isPlaceInDifferentCity({
+          name: featName,
+          city: providerCity,
+          address: item.address?.freeformAddress || '',
+          latitude: Number(lat),
+          longitude: Number(lon)
+        }, city, cityLat, cityLon)) {
+          continue
+        }
+
         return {
           name: featName,
           address: item.address?.freeformAddress || featName,
+          city: providerCity,
           latitude: Number(lat),
           longitude: Number(lon),
           placeId: `tomtom:${item.id || ''}`,
@@ -342,6 +369,15 @@ async function queryWikipediaCoordinates({ query, expectedName = '', city = '', 
           continue
         }
 
+        if (city && (maxDistanceKm == null || maxDistanceKm <= 60) && isPlaceInDifferentCity({
+          name: title,
+          address: title,
+          latitude: lat,
+          longitude: lon
+        }, city, cityLat, cityLon)) {
+          continue
+        }
+
         const freeImage = page.pageprops?.page_image_free || ''
         const imageUrl = freeImage ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(freeImage)}` : ''
 
@@ -372,7 +408,7 @@ async function queryWikipediaCoordinates({ query, expectedName = '', city = '', 
 /**
  * Queries OSM Nominatim directly for complex ways/relations (squares, avenues, promenades).
  */
-async function queryNominatimDetailed({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
+async function queryNominatimDetailed({ query, expectedName = '', city = '', cityLat, cityLon, maxDistanceKm }) {
   const queries = Array.isArray(query) ? query : [query]
   for (const currentQuery of [...new Set(queries.map(v => String(v || '').trim()).filter(Boolean))]) {
     try {
@@ -401,9 +437,22 @@ async function queryNominatimDetailed({ query, expectedName = '', cityLat, cityL
           continue
         }
 
+        const addrObj = item.address || {}
+        const providerCity = addrObj.city || addrObj.town || addrObj.municipality || addrObj.county || ''
+        if (city && (maxDistanceKm == null || maxDistanceKm <= 60) && isPlaceInDifferentCity({
+          name: itemName,
+          city: providerCity,
+          address: item.display_name || '',
+          latitude: lat,
+          longitude: lon
+        }, city, cityLat, cityLon)) {
+          continue
+        }
+
         return {
           name: itemName,
           address: item.display_name || itemName,
+          city: providerCity,
           latitude: lat,
           longitude: lon,
           placeId: `osm:${item.osm_type || 'node'}/${item.osm_id || ''}`,
@@ -506,7 +555,7 @@ export async function searchMapboxPlaces({
 /**
  * Queries Geoapify Geocoding & Places API.
  */
-async function queryGeoapifyGeocoding({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
+async function queryGeoapifyGeocoding({ query, expectedName = '', city = '', cityLat, cityLon, maxDistanceKm }) {
   const apiKey = process.env.GEOAPIFY_API_KEY?.trim()
   if (!apiKey) return null
 
@@ -552,9 +601,22 @@ async function queryGeoapifyGeocoding({ query, expectedName = '', cityLat, cityL
           continue
         }
 
+        const providerCity = props.city || props.municipality || props.town || ''
+        if (city && (maxDistanceKm == null || maxDistanceKm <= 60) && isPlaceInDifferentCity({
+          name: featureName,
+          city: providerCity,
+          address: props.formatted || '',
+          latitude: Number(lat),
+          longitude: Number(lon),
+          tags: props
+        }, city, cityLat, cityLon)) {
+          continue
+        }
+
         return {
           name: featureName || currentQuery,
           address: props.formatted || '',
+          city: providerCity,
           latitude: Number(lat),
           longitude: Number(lon),
           placeId: `geoapify:${props.place_id || ''}`,
@@ -664,7 +726,8 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
   const cached = await lookupCachedPlace(cleanName, cleanCity)
   if (!options.preferCanonical && cached && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude) && !(cached.latitude === 0 && cached.longitude === 0)) {
     if (cachedProviderIdentityMatches(cached, cleanName) &&
-        isWithinCityBounds(cached.latitude, cached.longitude, cityLat, cityLon, maxDistanceKm)) {
+        isWithinCityBounds(cached.latitude, cached.longitude, cityLat, cityLon, maxDistanceKm) &&
+        !(cleanCity && maxDistanceKm <= 60 && isPlaceInDifferentCity(cached, cleanCity, cityLat, cityLon))) {
       return {
         name: cached.name || cleanName,
         city: cleanCity,
@@ -703,7 +766,8 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
     }).catch(() => null)
 
     if (canonicalResult && Number.isFinite(canonicalResult.latitude) && Number.isFinite(canonicalResult.longitude) &&
-        isWithinCityBounds(canonicalResult.latitude, canonicalResult.longitude, cityLat, cityLon, maxDistanceKm)) {
+        isWithinCityBounds(canonicalResult.latitude, canonicalResult.longitude, cityLat, cityLon, maxDistanceKm) &&
+        !(cleanCity && maxDistanceKm <= 60 && isPlaceInDifferentCity(canonicalResult, cleanCity, cityLat, cityLon))) {
       return {
         name: cleanName,
         city: cleanCity,
@@ -727,6 +791,7 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
   const mapboxResult = await queryMapboxGeocoding({
     query: progressiveQueries,
     expectedName: cleanName,
+    city: cleanCity,
     cityLat,
     cityLon,
     maxDistanceKm
@@ -761,6 +826,7 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
   const geoapifyResult = await queryGeoapifyGeocoding({
     query: progressiveQueries,
     expectedName: cleanName,
+    city: cleanCity,
     cityLat,
     cityLon,
     maxDistanceKm
@@ -795,6 +861,7 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
   const tomtomResult = await queryTomTomGeocoding({
     query: progressiveQueries,
     expectedName: cleanName,
+    city: cleanCity,
     cityLat,
     cityLon,
     maxDistanceKm
@@ -833,7 +900,8 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
   }).catch(() => null)
 
   if (osmResult && Number.isFinite(osmResult.latitude) && Number.isFinite(osmResult.longitude)) {
-    if (isWithinCityBounds(osmResult.latitude, osmResult.longitude, cityLat, cityLon, maxDistanceKm)) {
+    if (isWithinCityBounds(osmResult.latitude, osmResult.longitude, cityLat, cityLon, maxDistanceKm) &&
+        !(cleanCity && maxDistanceKm <= 60 && isPlaceInDifferentCity(osmResult, cleanCity, cityLat, cityLon))) {
       const resolved = {
         name: cleanName,
         city: cleanCity,
@@ -859,6 +927,7 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
   const nominatimResult = await queryNominatimDetailed({
     query: progressiveQueries,
     expectedName: cleanName,
+    city: cleanCity,
     cityLat,
     cityLon,
     maxDistanceKm
@@ -923,6 +992,7 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
     const mapboxAddress = await queryMapboxGeocoding({
       query: buildProgressiveSearchQueries({ name: cleanName, city: cleanCity, country, address }),
       expectedName: address || cleanName,
+      city: cleanCity,
       cityLat,
       cityLon,
       maxDistanceKm
@@ -954,6 +1024,7 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
     const geoapifyAddress = await queryGeoapifyGeocoding({
       query: buildProgressiveSearchQueries({ name: cleanName, city: cleanCity, country, address }),
       expectedName: address || cleanName,
+      city: cleanCity,
       cityLat,
       cityLon,
       maxDistanceKm

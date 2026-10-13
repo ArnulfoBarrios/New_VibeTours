@@ -1,4 +1,5 @@
 import { GeoCache } from './geoCache.js'
+import { isPlaceInDifferentCity, registerDiscoveredCityCentroid } from './osm.js'
 
 const canonicalCache = new GeoCache(24 * 60 * 60 * 1000, 500)
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
@@ -645,6 +646,9 @@ export async function resolveCanonicalDestination(query, options = {}) {
             candidates: isAmbiguous ? distinctDestinations : []
           }
 
+          if (result.city && !result.isMicroDestination) {
+            registerDiscoveredCityCentroid(result.city, result.latitude, result.longitude)
+          }
           canonicalCache.set(cacheKey, result)
           canonicalCache.set(`canonical_${normKey}`, result)
           if (result.city) {
@@ -707,6 +711,9 @@ export async function resolveCanonicalDestination(query, options = {}) {
           isAmbiguous: false,
           candidates: []
         }
+          if (result.city) {
+            registerDiscoveredCityCentroid(result.city, result.latitude, result.longitude)
+          }
           canonicalCache.set(cacheKey, result)
           return result
         }
@@ -809,7 +816,15 @@ export function validateCandidateLocation(place, canonicalDest, maxDistanceKm = 
     return false
   }
 
-  // 2. Country mismatch check
+  // 2.5 Municipal / Voronoi boundary check for single-city destinations (rejects neighboring major cities like Manizales when visiting Pereira)
+  if (!canonicalDest.isMicroDestination && maxDistanceKm <= 60 && canonicalDest.city) {
+    if (isPlaceInDifferentCity({ ...place, latitude: lat, longitude: lon }, canonicalDest.city, canonicalDest.latitude, canonicalDest.longitude)) {
+      console.warn(`[validateCandidateLocation] Discarding "${place.name}" because it belongs to a neighboring city outside ${canonicalDest.city}`)
+      return false
+    }
+  }
+
+  // 3. Country mismatch check
   const placeCountryCode = formatCountryCode(place.countryCode || place.country_code, place.country)
   if (placeCountryCode && canonicalDest.countryCode) {
     if (placeCountryCode !== canonicalDest.countryCode) {
@@ -818,7 +833,7 @@ export function validateCandidateLocation(place, canonicalDest, maxDistanceKm = 
     }
   }
 
-  // 3. Reject known cross-country noise keywords if canonical country is not Costa Rica / Philippines
+  // 4. Reject known cross-country noise keywords if canonical country is not Costa Rica / Philippines
   const canonicalCountryLower = (canonicalDest.country || '').toLowerCase()
   if (!canonicalCountryLower.includes('costa rica')) {
     const forbidden = ['costa rica', 'puriscal', 'san josé, costa rica', 'alajuela', 'heredia', 'samar', 'philippines']

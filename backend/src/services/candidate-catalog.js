@@ -4,12 +4,14 @@ import {
   isFoodOrDrinkEstablishment,
   isGenericFacilityName,
   isNonTouristFacility,
+  isPlaceInDifferentCity,
   isValidHotelCandidate,
   overpassAttractions,
   overpassHotels,
   overpassNearbyFood,
   resolveCanonicalPlaceIdentity
 } from './osm.js'
+import { isLowQualityOrFastFoodVenue } from './open-tourism-service.js'
 import { normalizePlaceNameKey } from './places-cache-service.js'
 import {
   resolvePlaceWithCascade,
@@ -55,8 +57,7 @@ const GEOAPIFY_CATEGORIES = Object.freeze({
   restaurant: [
     'catering.restaurant',
     'catering.cafe',
-    'catering.bar',
-    'catering.fast_food'
+    'catering.bar'
   ],
   hotel: [
     'accommodation.hotel',
@@ -71,12 +72,12 @@ const ATTRACTION_TYPES = new Set([
   'monument', 'memorial', 'ruins', 'castle', 'archaeological_site', 'church',
   'cathedral', 'city_gate', 'fort', 'heritage', 'park', 'garden', 'nature_reserve',
   'beach', 'island', 'islet', 'national_park', 'arts_centre', 'marketplace',
-  'theatre', 'ferry_terminal'
+  'theatre', 'ferry_terminal', 'square', 'waterfall', 'hot_spring', 'volcano', 'peak'
 ])
 
 const RESTAURANT_TYPES = new Set([
   'restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court', 'biergarten',
-  'ice_cream', 'confectionery'
+  'ice_cream', 'confectionery', 'bakery'
 ])
 
 const HOTEL_TYPES = new Set([
@@ -106,6 +107,7 @@ function asSignalList(value) {
 function providerSignals(candidate) {
   const tags = candidate?.tags && typeof candidate.tags === 'object' ? candidate.tags : {}
   const type = normalizeIdentityText(candidate?.providerType || candidate?.type)
+  const osmVal = normalizeIdentityText(tags.osm_value)
   // `category` is the internal role requested by the planner, not provider
   // evidence. Only providerCategory/type and raw provider tags count here.
   const providerCategory = normalizeIdentityText(candidate?.providerCategory)
@@ -128,25 +130,31 @@ function providerSignals(candidate) {
     if (reason && !list.includes(reason)) list.push(reason)
   }
 
-  if (ATTRACTION_TYPES.has(type)) add(attraction, `type:${type}`)
-  if (ATTRACTION_TYPES.has(providerCategory)) add(attraction, `category:${providerCategory}`)
-  if (ATTRACTION_TYPES.has(tourism)) add(attraction, `tourism:${tourism}`)
-  if (ATTRACTION_TYPES.has(historic)) add(attraction, `historic:${historic}`)
-  if (ATTRACTION_TYPES.has(leisure)) add(attraction, `leisure:${leisure}`)
-  if (ATTRACTION_TYPES.has(natural)) add(attraction, `natural:${natural}`)
-  if (ATTRACTION_TYPES.has(place)) add(attraction, `place:${place}`)
-  if (boundary === 'national park' || boundary === 'national_park') add(attraction, 'boundary:national_park')
-  if (geoapifyCategories.some(value => value.startsWith('tourism.') || value.startsWith('tourism ') || value.startsWith('leisure.') || value.startsWith('leisure '))) {
-    add(attraction, 'geoapify:tourism_or_leisure')
-  }
-  if (mapboxPlaceTypes.some(value => value === 'poi' || value === 'landmark')) {
-    if (/\b(tourism|museum|historic|landmark|park|viewpoint|beach)\b/.test(query)) add(attraction, `mapbox:${query}`)
-  }
-  if (/\b(castillo|fuerte|museo|parque|plaza|mirador|monumento|monument|playa|beach|catedral|iglesia|teatro|jardin|isla|fortaleza|palacio|patrimonio)\b/.test(normalizeIdentityText(candidate?.name))) {
-    add(attraction, 'name:tourist_landmark')
+  const isFoodByNameOrTags = isFoodOrDrinkEstablishment(candidate?.name, tags) || isLowQualityOrFastFoodVenue(candidate?.name, tags)
+
+  if (!isFoodByNameOrTags) {
+    if (ATTRACTION_TYPES.has(type)) add(attraction, `type:${type}`)
+    if (ATTRACTION_TYPES.has(osmVal)) add(attraction, `osm_value:${osmVal}`)
+    if (ATTRACTION_TYPES.has(providerCategory)) add(attraction, `category:${providerCategory}`)
+    if (ATTRACTION_TYPES.has(tourism)) add(attraction, `tourism:${tourism}`)
+    if (ATTRACTION_TYPES.has(historic)) add(attraction, `historic:${historic}`)
+    if (ATTRACTION_TYPES.has(leisure)) add(attraction, `leisure:${leisure}`)
+    if (ATTRACTION_TYPES.has(natural)) add(attraction, `natural:${natural}`)
+    if (ATTRACTION_TYPES.has(place)) add(attraction, `place:${place}`)
+    if (boundary === 'national park' || boundary === 'national_park' || boundary === 'protected area' || boundary === 'protected_area') add(attraction, 'boundary:national_park')
+    if (geoapifyCategories.some(value => value.startsWith('tourism.') || value.startsWith('tourism ') || value.startsWith('leisure.') || value.startsWith('leisure '))) {
+      add(attraction, 'geoapify:tourism_or_leisure')
+    }
+    if (mapboxPlaceTypes.some(value => value === 'poi' || value === 'landmark')) {
+      if (/\b(tourism|museum|historic|landmark|park|viewpoint|beach)\b/.test(query)) add(attraction, `mapbox:${query}`)
+    }
+    if (/\b(castillo|fuerte|museo|parque|plaza|mirador|monumento|monument|playa|beach|catedral|iglesia|basilica|santuario|teatro|jardin|isla|fortaleza|palacio|patrimonio|bioparque|ecoparque|reserva|laguna|nevado|termales|viaducto)\b/.test(normalizeIdentityText(candidate?.name))) {
+      add(attraction, 'name:tourist_landmark')
+    }
   }
 
   if (RESTAURANT_TYPES.has(type)) add(restaurant, `type:${type}`)
+  if (RESTAURANT_TYPES.has(osmVal)) add(restaurant, `osm_value:${osmVal}`)
   if (RESTAURANT_TYPES.has(providerCategory)) add(restaurant, `category:${providerCategory}`)
   if (RESTAURANT_TYPES.has(amenity)) add(restaurant, `amenity:${amenity}`)
   if (tags.cuisine) add(restaurant, 'osm:cuisine')
@@ -154,7 +162,7 @@ function providerSignals(candidate) {
   if (mapboxPlaceTypes.some(value => value === 'poi') && /\b(restaurant|local cuisine|cafe)\b/.test(query)) {
     add(restaurant, `mapbox:${query}`)
   }
-  if (isFoodOrDrinkEstablishment(candidate?.name)) add(restaurant, 'name:food_or_drink')
+  if (isFoodByNameOrTags) add(restaurant, 'name:food_or_drink')
 
   if (HOTEL_TYPES.has(type)) add(hotel, `type:${type}`)
   if (HOTEL_TYPES.has(providerCategory)) add(hotel, `category:${providerCategory}`)
@@ -201,7 +209,8 @@ export function validateCandidateIdentityAndCategory(candidate, {
   const address = String(candidate?.address || candidate?.formatted || '').trim()
   const signals = providerSignals({ ...candidate, name })
   const catalogCategory = normalizeIdentityText(candidate?.catalogCategoryEvidence)
-  if (catalogCategory === normalizeIdentityText(category) && candidate?.catalogNameVerified === true) {
+  const isFoodConflict = category === 'attraction' && (signals.restaurant?.length > 0)
+  if (catalogCategory === normalizeIdentityText(category) && candidate?.catalogNameVerified === true && !isFoodConflict) {
     signals[category] = [...(signals[category] || []), `catalog:verified_${category}_name`]
   }
   const requestedSignals = signals[category] || []
@@ -210,6 +219,7 @@ export function validateCandidateIdentityAndCategory(candidate, {
     .map(([candidateCategory]) => candidateCategory)
   const trustedCatalogRole = catalogCategory === normalizeIdentityText(category) &&
     candidate?.catalogNameVerified === true &&
+    !isFoodConflict &&
     requestedSignals.some(signal => !signal.startsWith('catalog:'))
 
   if (!name || (!isCuratedCoastalCandidate(candidate) && isGenericFacilityName(name))) reasons.push('identity:name_missing_or_generic')
@@ -218,6 +228,9 @@ export function validateCandidateIdentityAndCategory(candidate, {
   const providerCoordinatesVerified = candidate?.rawCoordinatesVerified === true || candidate?.coordinatesVerified === true
   if (!placeId && !address && !providerCoordinatesVerified) reasons.push('identity:no_provider_id_address_or_verified_coordinates')
   if (!candidateDistanceWithin({ latitude, longitude }, centerLat, centerLon, radiusKm)) reasons.push('identity:outside_destination_radius')
+  if (destination && isPlaceInDifferentCity({ ...candidate, latitude, longitude }, destination, centerLat, centerLon)) {
+    reasons.push('identity:different_city')
+  }
 
   const candidateCountry = normalizeIdentityText(candidate?.country)
   const targetCountry = normalizeIdentityText(country)
@@ -372,11 +385,12 @@ function isCandidateAllowed(candidate, category) {
   }
 
   if (category === 'attraction') {
-    if (isFoodOrDrinkEstablishment(name)) return false
+    if (isFoodOrDrinkEstablishment(name, tags) || isLowQualityOrFastFoodVenue(name, tags)) return false
   } else if (category === 'hotel') {
     if (!isValidHotelCandidate(name, tags)) return false
   } else if (category === 'restaurant') {
     if (/\b(hotel|hostel|resort|hospital|cl[ií]nica|farmacia|supermercado)\b/i.test(name)) return false
+    if (isLowQualityOrFastFoodVenue(name, tags)) return false
   }
 
   return true
@@ -408,10 +422,22 @@ export function normalizeRealCandidate(raw, {
   const source = normalizeSource(raw?.coordinateSource ?? raw?.coordinate_source ?? raw?.source, sourceHint)
   if (!isTrustedSource(source)) return null
 
+  const rawTags = raw?.tags && typeof raw.tags === 'object' ? raw.tags : {}
+  const explicitMunicipality = String(
+    raw?.municipality ||
+    rawTags['addr:city'] ||
+    rawTags['addr:municipality'] ||
+    rawTags.city ||
+    rawTags.town ||
+    rawTags.municipality ||
+    ''
+  ).trim()
+
   const candidate = {
     name,
     category,
     city: String(raw?.city || destination || '').trim(),
+    municipality: explicitMunicipality,
     country: String(raw?.country || country || '').trim(),
     address: String(raw?.address || raw?.formatted || '').trim(),
     latitude,
@@ -426,7 +452,7 @@ export function normalizeRealCandidate(raw, {
     coordinateSource: source,
     coordinatesVerified: true,
     rawCoordinatesVerified: raw?.coordinatesVerified === true || raw?.coordinates_verified === true,
-    tags: raw?.tags && typeof raw.tags === 'object' ? raw.tags : {},
+    tags: rawTags,
     providerType: String(raw?.providerType || raw?.type || '').trim(),
     providerCategory: String(raw?.providerCategory || raw?.category || '').trim(),
     catalogCategoryEvidence: String(raw?.catalogCategoryEvidence || '').trim(),
@@ -455,6 +481,7 @@ export function normalizeRealCandidate(raw, {
     : {}
 
   if (!candidateDistanceWithin(candidate, centerLat, centerLon, radiusKm)) return null
+  if (destination && isPlaceInDifferentCity(candidate, destination, centerLat, centerLon)) return null
   if (!isCandidateAllowed(candidate, category)) return null
 
   const validation = validateCandidateIdentityAndCategory(candidate, {
@@ -698,13 +725,13 @@ async function discoverProviderCandidates({ destination, country, centerLat, cen
   }, { attraction: [], restaurant: [], hotel: [] })
 }
 
-async function discoverOsmCandidates({ centerLat, centerLon, radiusKm }) {
+async function discoverOsmCandidates({ destination, country, centerLat, centerLon, radiusKm }) {
   if (!Number.isFinite(Number(centerLat)) || !Number.isFinite(Number(centerLon))) {
     return { attraction: [], restaurant: [], hotel: [] }
   }
 
   const [attractions, restaurants, hotels] = await Promise.all([
-    overpassAttractions(centerLat, centerLon, radiusKm * 1000).catch(() => []),
+    overpassAttractions(centerLat, centerLon, radiusKm * 1000, { city: destination }).catch(() => []),
     overpassNearbyFood(centerLat, centerLon, Math.min(radiusKm * 1000, 12000)).catch(() => []),
     overpassHotels(centerLat, centerLon, 'moderate', Math.min(radiusKm * 1000, 15000)).catch(() => [])
   ])
@@ -712,6 +739,8 @@ async function discoverOsmCandidates({ centerLat, centerLon, radiusKm }) {
   const normalize = (records, category) => records
     .map(raw => normalizeRealCandidate(raw, {
       category,
+      destination,
+      country,
       sourceHint: 'osm',
       centerLat,
       centerLon,
