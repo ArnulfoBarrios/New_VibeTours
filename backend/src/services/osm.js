@@ -2171,6 +2171,10 @@ export function isNonTouristFacility(rawTags = {}) {
   const rawName = String(rawTags.name ?? tags.name ?? '').toLowerCase()
   const name = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
+  if (/\b(unidad\s+residencial|conjunto\s+residencial|complejo\s+residencial|residencial|residential\s+(?:unit|complex|building|community)|apartment\s+complex|condominio|urbanizacion)\b/i.test(name)) {
+    return true
+  }
+
   // 3. Name-based road / highway patterns
   if (
     /^(v[íi]a\s+(?!parque|verde)|carretera\b|autopista\b|tramo\b|variante\b|troncal\b)/i.test(name) ||

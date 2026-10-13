@@ -231,10 +231,14 @@ async function inspectOpenAiResponseForQuotaFailure(response) {
 }
 
 export async function fetchOpenAiChatCompletion(init = {}, retryOptions = null) {
+  const geminiFallbackRetry = {
+    attempts: 1,
+    timeoutMs: Math.min(Number(retryOptions?.timeoutMs) || 2500, 2500)
+  }
   if (!getActiveOpenAiKey() || isOpenAiCircuitOpen()) {
     const geminiKey = getActiveGeminiKey()
     if (geminiKey) {
-      return await fetchGeminiChatCompletion(init, retryOptions)
+      return await fetchGeminiChatCompletion(init, geminiFallbackRetry)
     }
     return new Response(JSON.stringify({ error: { code: 'circuit_breaker_open', message: openAiCircuitReason || 'no_llm_key' } }), {
       status: 429,
@@ -249,7 +253,7 @@ export async function fetchOpenAiChatCompletion(init = {}, retryOptions = null) 
     const geminiKey = getActiveGeminiKey()
     if (geminiKey) {
       console.log('[llm-fallback] OpenAI request unavailable or quota exhausted. Seamlessly routing to Google Gemini...')
-      return await fetchGeminiChatCompletion(init, retryOptions)
+      return await fetchGeminiChatCompletion(init, geminiFallbackRetry)
     }
   }
   return response
@@ -296,6 +300,7 @@ export function cleanAndParseJson(rawContent, fallback = null) {
 
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
 const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
+const destinationCatalogInFlight = new Map()
 
 // The chat response and the map planner must share the same physical-place
 // identity. Some venues have several public names; these are aliases, not
@@ -351,6 +356,32 @@ export function isChatHotelStop(placeName, selectedHotel = null) {
       normalizedName.includes(normalizedSelectedName) ||
       normalizedSelectedName.includes(normalizedName))
   )
+}
+
+function isLodgingCandidateRecord(place = {}) {
+  const tags = { ...(place?.tags || {}), ...(place?.rawTags || {}) }
+  const lodgingTypes = [
+    place?.entityType,
+    place?.category,
+    place?.type,
+    tags.tourism,
+    tags.accommodation
+  ].map(value => String(value || '').toLowerCase())
+  return lodgingTypes.some(value =>
+    ['hotel', 'hostel', 'guest_house', 'guesthouse', 'motel', 'apartment', 'camp_site', 'caravan_site', 'lodge', 'lodging'].includes(value)
+  ) || /\b(hotel|hostal|hostel|resort|apartahotel|motel|alojamiento|hospedaje)\b/i.test(String(place?.name || place?.nombre || ''))
+}
+
+function isQualifiedChatItineraryPlace(place = {}) {
+  const name = String(place?.name || place?.nombre || '').trim()
+  if (!name || isLodgingCandidateRecord(place) || isNonTouristFacility(place) || isGenericFacilityName(name) || isUnmappedOrClosedVenue(name)) {
+    return false
+  }
+  const category = String(place?.entityType || place?.category || place?.type || '').toLowerCase()
+  if (['restaurant', 'cafe', 'bar', 'food', 'eatery'].includes(category) || isFoodOrDrinkEstablishment(name, place?.tags || place?.rawTags)) {
+    return rankAndFilterTouristRestaurants([place]).length > 0
+  }
+  return rankAndFilterTouristAttractions([place]).length > 0
 }
 
 export const GENERIC_LODGING_TERMS = new Set([
@@ -598,7 +629,7 @@ export function resolveCoordinatesForPlace(placeName, ...sources) {
 
 async function resolveOsmBackedChatPlace(place, city = '', country = '', selectedHotel = null, options = {}) {
   const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
-  if (!name || isTemporalOrDurationPhrase(name) || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name) || isLowQualityOrFastFoodVenue(name, place?.tags)) return null
+  if (!name || isTemporalOrDurationPhrase(name) || isChatHotelStop(name, selectedHotel) || isLodgingCandidateRecord(place) || isUnmappedOrClosedVenue(name) || isLowQualityOrFastFoodVenue(name, place?.tags)) return null
   const geoScope = geographicScopeFor({ ...options, city, destination: city })
   const cityCheckOptions = { allowSameMetroGroup: geoScope.allowNearbyMunicipalities === true }
 
@@ -644,7 +675,7 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
 
   // 1.5 Check cache first before querying live geocoders
   const cachedPlace = await lookupCachedPlace(name, city).catch(() => null)
-  if (cachedPlace && hasOsmMapRecord(cachedPlace) && !isLowQualityOrFastFoodVenue(cachedPlace.name || name, cachedPlace.tags) && isWithinCoastalCorridorBounds(cachedPlace.latitude, cachedPlace.longitude, city)) {
+  if (cachedPlace && hasOsmMapRecord(cachedPlace) && !isLodgingCandidateRecord(cachedPlace) && !isLowQualityOrFastFoodVenue(cachedPlace.name || name, cachedPlace.tags) && isWithinCoastalCorridorBounds(cachedPlace.latitude, cachedPlace.longitude, city)) {
     if (!city || !isPlaceInDifferentCity(cachedPlace, city, centerLat, centerLon, [], cityCheckOptions)) {
       if (centerLat != null && centerLon != null) {
         const distM = haversineMeters(centerLat, centerLon, cachedPlace.latitude, cachedPlace.longitude)
@@ -662,7 +693,7 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
     isRegionalOrNature: geoScope.isRegional,
     maxDistanceKm: geoScope.maxDistanceKm
   }).catch(() => null)
-  if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo) && !isLowQualityOrFastFoodVenue(geo.name || name, geo.tags) && isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) {
+  if (hasOsmMapRecord(geo) && !isLodgingCandidateRecord(geo) && !isNonTouristFacility(geo) && !isLowQualityOrFastFoodVenue(geo.name || name, geo.tags) && isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) {
     if (!city || !isPlaceInDifferentCity(geo, city, centerLat, centerLon, [], cityCheckOptions)) {
       if (centerLat != null && centerLon != null) {
         const distM = haversineMeters(centerLat, centerLon, geo.latitude, geo.longitude)
@@ -685,7 +716,7 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
     maxDistanceKm: geoScope.maxDistanceKm,
     options: { preferCanonical: true, isRegionalOrNature: geoScope.isRegional }
   }).catch(() => null)
-  if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
+  if (providerGeo && !isLodgingCandidateRecord(providerGeo) && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
       !isLowQualityOrFastFoodVenue(providerGeo.name || name, providerGeo.tags) &&
       isWithinCoastalCorridorBounds(providerGeo.latitude, providerGeo.longitude, city)) {
     if (city && isPlaceInDifferentCity(providerGeo, city, centerLat, centerLon, [], cityCheckOptions)) return null
@@ -957,6 +988,7 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
   }
 
   const trustedNames = (Array.isArray(trustedPlaces) ? trustedPlaces : [])
+    .filter(place => !isLodgingCandidateRecord(place) && !isNonTouristFacility(place))
     .map(place => typeof place === 'string' ? place : place?.name)
     .map(name => String(name || '').trim())
     .filter(Boolean)
@@ -983,6 +1015,23 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
   return lines.filter((_, index) => checks[index]).join('\n')
 }
 
+function keepOnlyTrustedChatPlacesInText(text, city = '', selectedHotel = null, trustedPlaces = []) {
+  const trustedNames = (Array.isArray(trustedPlaces) ? trustedPlaces : [])
+    .filter(place => !isLodgingCandidateRecord(place) && !isNonTouristFacility(place))
+    .map(place => typeof place === 'string' ? place : place?.name)
+    .map(name => String(name || '').trim())
+    .filter(Boolean)
+  return sanitizeChatItineraryText(text, city, selectedHotel)
+    .split(/\r?\n/)
+    .filter(line => {
+      if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/.test(line)) return true
+      const candidate = itineraryBulletPlaceName(line)
+      if (!candidate || isChatHotelStop(candidate, selectedHotel)) return false
+      return trustedNames.some(name => arePlacesSimilar(name, candidate))
+    })
+    .join('\n')
+}
+
 export async function sanitizeChatItineraryTextWithOsm(text, city = '', country = '', selectedHotel = null, trustedPlaces = [], options = {}) {
   const sanitized = sanitizeChatItineraryText(text, city, selectedHotel)
   const isStructuredItinerary = /itinerario\s+de\s+viaje|\bD[ií]a\s+\d+\s*:|recorrido\s+de\s+\d+\s+paradas|\btour\s+(?:completo\s+)?de\s+1\s+d[ií]a/i.test(sanitized)
@@ -996,6 +1045,7 @@ export async function sanitizeChatItineraryTextWithOsm(text, city = '', country 
 
   const lines = sanitized.split(/\r?\n/)
   const trustedNames = (Array.isArray(trustedPlaces) ? trustedPlaces : [])
+    .filter(place => !isLodgingCandidateRecord(place) && !isNonTouristFacility(place))
     .map(place => typeof place === 'string' ? place : place?.name)
     .map(name => String(name || '').trim())
     .filter(Boolean)
@@ -2311,7 +2361,7 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
  * Fetches verified real venues, restaurants, cafes, bars, and attractions
  * dynamically from OpenStreetMap (Overpass API / Photon) anywhere in the world.
  */
-export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null, options = {}) {
+async function loadRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null, options = {}) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
   const normalizedCountry = String(countryName || '').trim().toLowerCase()
   const requestedDays = Math.max(1, Number(options?.requestedDays || options?.numDays || options?.daysCount || 7))
@@ -2753,7 +2803,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   ]
   realPlaces = rankAndFilterTouristAttractions(
     realPlaces.filter(p => !isGenericFacilityName(typeof p === 'string' ? p : p?.name)),
-    allPriorityIconics
+    presetIconics
   )
   realPlaces = mergeCuratedCoastalPlaces(realPlaces, clean)
   realRests = rankAndFilterTouristRestaurants(realRests)
@@ -2804,6 +2854,18 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   unifiedCatalog.restaurants = (unifiedCatalog.restaurants || []).filter(place => !isOutsideDestinationCity(place))
   unifiedCatalog.hotels = (unifiedCatalog.hotels || []).filter(place => !isOutsideDestinationCity(place))
   unifiedCatalog.all = (unifiedCatalog.all || []).filter(place => !isOutsideDestinationCity(place))
+
+  // Providers can add records after the OSM/Wikipedia checks above. Reapply
+  // tourist qualification to the final merged attraction list so lodging,
+  // residences, and ordinary map listings cannot re-enter through that merge.
+  unifiedCatalog.places = rankAndFilterTouristAttractions(
+    (unifiedCatalog.places || []).filter(place =>
+      !isLodgingCandidateRecord(place) &&
+      !isNonTouristFacility(place) &&
+      !isUnmappedOrClosedVenue(place?.name || '')
+    ),
+    presetIconics
+  )
 
   const catalogPlaceCandidates = unifiedCatalog.places || []
   const prioritizedPlaceCandidates = []
@@ -2913,6 +2975,27 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
   destinationCatalogCache.set(cacheKey, result)
   return result
+}
+
+export function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null, options = {}) {
+  const clean = cleanAdministrativeCityName(destName).toLowerCase()
+  const normalizedCountry = String(countryName || '').trim().toLowerCase()
+  const requestedDays = Math.max(1, Number(options?.requestedDays || options?.numDays || options?.daysCount || 7))
+  const coastalIslands = isCoastalIslandsTour(options)
+  const allowNearbyMunicipalities = coastalIslands || options?.allowNearbyMunicipalities === true
+  const cacheMode = coastalIslands ? 'coastal' : 'general'
+  const cacheKey = `catalog_osm_v9_${cacheMode}_${allowNearbyMunicipalities ? 'nearby' : 'city'}_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
+  const existingRequest = destinationCatalogInFlight.get(cacheKey)
+  if (existingRequest) return existingRequest
+
+  const request = loadRealDestinationCatalog(destName, countryName, userLat, userLon, options)
+    .finally(() => {
+      if (destinationCatalogInFlight.get(cacheKey) === request) {
+        destinationCatalogInFlight.delete(cacheKey)
+      }
+    })
+  destinationCatalogInFlight.set(cacheKey, request)
+  return request
 }
 
 
@@ -3361,12 +3444,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         } : null
         realCatalog = cachedCatalog || { places: [], restaurants: [], hotels: [] }
       } else {
-        const needsImmediate = !shouldDeferCoastalCatalog && (isExplicitItineraryRequest ||
+        const tripReadyForCatalog = Boolean(preReqCheck.isComplete || known?.readyToBuild)
+        const needsImmediate = !shouldDeferCoastalCatalog && (
           isExplicitRestaurantInquiry ||
           isExplicitAttractionInquiry ||
-          isExplicitBuildRequest ||
-          isCompleteOrReadyToPresent ||
-          Boolean(known?.readyToBuild))
+          (tripReadyForCatalog && (
+            isExplicitItineraryRequest ||
+            isExplicitBuildRequest ||
+            isCompleteOrReadyToPresent
+          ))
+        )
 
         if (needsImmediate) {
           const cachedCatalogValue = await resolveWithin(getCachedCityCatalog(destName).catch(() => null), 1200, null)
@@ -3390,9 +3477,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
                 console.warn('[generateChatResponse] Catalog lookup error:', err.message)
                 return null
               })
-            realCatalog = await resolveWithin(catalogPromise, 7000, null)
+            realCatalog = await resolveWithin(catalogPromise, 5000, null)
             if (!realCatalog) {
-              console.warn('[generateChatResponse] Catalog lookup exceeded the 7-second chat budget.')
+              console.warn('[generateChatResponse] Catalog lookup exceeded the 5-second chat budget.')
               realCatalog = cachedCatalog || { places: [], restaurants: [], hotels: [] }
             }
             if (cachedCatalog?.places?.length > 0 && (!realCatalog.places || realCatalog.places.length === 0)) {
@@ -4000,13 +4087,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         )
       )
 
-      let preset = (realCatalog?.hotels?.length > 0 || realCatalog?.places?.length > 0) ? realCatalog : null
+      let preset = realCatalog || null
       if (!preset && fbNeedsCatalog && !isLocationToDestination) {
-        const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
+        const cachedCatalog = await resolveWithin(getCachedCityCatalog(destName).catch(() => null), 1200, null)
         if (cachedCatalog && (cachedCatalog.places?.length > 0 || cachedCatalog.restaurants?.length > 0 || cachedCatalog.hotels?.length > 0)) {
           preset = cachedCatalog
         } else {
-          preset = await getRealDestinationCatalog(
+          preset = await resolveWithin(getRealDestinationCatalog(
             known.city || 'Destino',
             known.country || 'Local',
             known.latitude,
@@ -4016,7 +4103,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               tourType: known.tourType,
               allowNearbyMunicipalities: geographicScopeFor({ ...known, prompt: state?.message || '' }).allowNearbyMunicipalities
             }
-          ).catch(() => ({ places: [], restaurants: [], hotels: [] }))
+          ).catch(() => null), 4000, { places: [], restaurants: [], hotels: [] })
         }
       }
       if (!preset) {
@@ -4026,7 +4113,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         preset = normalizeCoastalCatalog(preset, destName)
       }
       if (!isLocationToDestination && (!preset.restaurants || preset.restaurants.length === 0) && destName) {
-        const cachedRests = await lookupCachedPlacesForCity(destName, 'restaurant').catch(() => [])
+        const cachedRests = await resolveWithin(lookupCachedPlacesForCity(destName, 'restaurant').catch(() => []), 1000, [])
         if (cachedRests?.length > 0) {
           preset.restaurants = isCoastalIslandsTour(known)
             ? cachedRests
@@ -4034,7 +4121,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         }
       }
       if (!isLocationToDestination && (!preset.places || preset.places.length === 0) && destName) {
-        const cachedAttrs = await lookupCachedPlacesForCity(destName, 'attraction').catch(() => [])
+        const cachedAttrs = await resolveWithin(lookupCachedPlacesForCity(destName, 'attraction').catch(() => []), 1000, [])
         if (cachedAttrs?.length > 0) {
           preset.places = isCoastalIslandsTour(known)
             ? cachedAttrs
@@ -4044,18 +4131,57 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       if (isCoastalIslandsTour(known)) {
         preset = normalizeCoastalCatalog(preset, destName)
       }
-      trustedFallbackPlaces = [
-        ...(preset?.places || []),
-        ...(preset?.restaurants || [])
-      ]
+      const normalizeFallbackCandidate = (place, entityType) => {
+        if (!place || typeof place !== 'object') return null
+        return {
+          ...place,
+          entityType: place.entityType || place.category || entityType,
+          tags: { ...(place.metadata?.tags || {}), ...(place.tags || {}), ...(place.rawTags || {}) }
+        }
+      }
+      const trustedFallbackAttractions = rankAndFilterTouristAttractions([
+        ...(preset?.candidateCatalog?.places || []).map(place => normalizeFallbackCandidate(place, 'attraction')),
+        ...(preset?.places || []).map(place => normalizeFallbackCandidate(place, 'attraction'))
+      ].filter(Boolean), [])
+        .filter(place => isQualifiedChatItineraryPlace(place))
+      const trustedFallbackRestaurants = rankAndFilterTouristRestaurants([
+        ...(preset?.candidateCatalog?.restaurants || []).map(place => normalizeFallbackCandidate(place, 'restaurant')),
+        ...(preset?.restaurants || []).map(place => normalizeFallbackCandidate(place, 'restaurant'))
+      ].filter(Boolean))
+        .filter(place => isQualifiedChatItineraryPlace(place))
+      trustedFallbackPlaces = [...trustedFallbackAttractions, ...trustedFallbackRestaurants]
+
+      const distributeStopsAcrossRequestedDays = (stops = [], numDays = 1) => {
+        const dayCount = Math.max(1, Number(numDays) || 1)
+        const uniqueStops = []
+        for (const stop of stops) {
+          if (!stop?.name || uniqueStops.some(existing => arePlaceNamesSemanticallySame(existing.name, stop.name, destName))) continue
+          uniqueStops.push(stop)
+        }
+        const assignableStops = uniqueStops.slice(0, dayCount * 2)
+        const byDay = Array.from({ length: dayCount }, () => [])
+        let nextStop = 0
+        // Place one confirmed stop on each available day before adding a second.
+        for (let day = 0; day < dayCount && nextStop < assignableStops.length; day++) {
+          byDay[day].push(assignableStops[nextStop++])
+        }
+        for (let day = 0; day < dayCount && nextStop < assignableStops.length; day++) {
+          byDay[day].push(assignableStops[nextStop++])
+        }
+        return byDay.flatMap((dayStops, index) => dayStops.map(stop => ({
+          ...stop,
+          dia: index + 1,
+          day: index + 1
+        })))
+      }
 
       const buildCoherentChatDayBlocks = (numDays, basePool) => {
-        const clustered = clusterStopsIntoCoherentDays(basePool, preset.restaurants || [], {
+        const clustered = clusterStopsIntoCoherentDays(basePool, trustedFallbackRestaurants, {
           numDays,
           city: destName,
           cityCenter: (known.latitude && known.longitude) ? { latitude: known.latitude, longitude: known.longitude } : null,
           coordinatesMap: preset.coordinatesMap || {},
-          candidatePlaces: [...(preset.candidateCatalog?.all || []), ...(preset.candidateCatalog?.places || []), ...(preset.restaurants || [])]
+          candidatePlaces: [...trustedFallbackAttractions, ...trustedFallbackRestaurants]
         })
         const clusteredStops = clustered.flatMap(dp =>
           dp.stops.map(s => ({
@@ -4075,16 +4201,19 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {})
           }))
         ).filter(stop => !isCoastalIslandsTour(known) || !isCoastalRestaurant(stop) || isCoastalMappedTouristStop(stop))
-        const coastalStops = isCoastalIslandsTour(known)
+        const clusteredOrCoastalStops = isCoastalIslandsTour(known)
           ? assignCoastalIslandDays(
               ensureCuratedCoastalStopsInItinerary(clusteredStops, destName, numDays),
               numDays
             )
           : clusteredStops
-        known.specificPlaces = coastalStops
+        const itineraryStops = isCoastalIslandsTour(known)
+          ? clusteredOrCoastalStops
+          : distributeStopsAcrossRequestedDays(clusteredOrCoastalStops, numDays)
+        known.specificPlaces = itineraryStops
         if (isCoastalIslandsTour(known)) {
           const byDay = new Map()
-          for (const stop of coastalStops) {
+          for (const stop of itineraryStops) {
             const day = Number(stop.dia || stop.day || 1)
             if (!byDay.has(day)) byDay.set(day, [])
             byDay.get(day).push(stop.name)
@@ -4093,9 +4222,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             .sort(([left], [right]) => left - right)
             .map(([day, names]) => `Día ${day}: ${destName}\n${names.map(name => ` • ${name}`).join('\n')}`)
         }
-        return clustered
-          .filter(dp => dp.stops.length > 0)
-          .map(dp => `Día ${dp.day}: ${destName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`)
+        return Array.from({ length: Math.max(1, Number(numDays) || 1) }, (_, index) => {
+          const dayStops = itineraryStops.filter(stop => Number(stop.dia || stop.day) === index + 1)
+          return `Día ${index + 1}: ${destName}${dayStops.length > 0
+            ? `\n${dayStops.map(stop => ` • ${stop.name}`).join('\n')}`
+            : '\nDía libre para descansar o explorar a tu ritmo.'}`
+        })
       }
 
       // buildLocationCorridorDayBlocks is hoisted to generateChatResponse scope above
@@ -4197,9 +4329,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
             ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
             : []
-          const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
+          const rawPresetRests = trustedFallbackRestaurants.map(r => r.name).filter(Boolean)
           const pool = deduplicateChatSpecificPlaces(
-            [...rawSpecifics, ...(preset.places || []), ...((preset.candidateCatalog?.places || []).map(p => p?.name || p).filter(Boolean))],
+            [...rawSpecifics, ...trustedFallbackAttractions.map(p => p.name)],
             destName
           ).map(p => typeof p === 'string' ? p : p.name)
            .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
@@ -4638,18 +4770,19 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     }
 
-    const effectiveTrustedPlaces = [
-      ...trustedFallbackPlaces,
-      ...(Array.isArray(known.specificPlaces) ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name) : [])
-    ]
+    const effectiveTrustedPlaces = trustedFallbackPlaces
 
     return {
-      responseMessage: await sanitizeChatItineraryTextWithOsm(
-        fallbackMsg,
-        destName,
-        destCountry,
-        known.selectedHotel,
-        effectiveTrustedPlaces
+      responseMessage: await resolveWithin(
+        sanitizeChatItineraryTextWithOsm(
+          fallbackMsg,
+          destName,
+          destCountry,
+          known.selectedHotel,
+          effectiveTrustedPlaces
+        ),
+        2500,
+        keepOnlyTrustedChatPlacesInText(fallbackMsg, destName, known.selectedHotel, effectiveTrustedPlaces)
       ),
       actionChips: fallbackChips,
       extractedPreferences: { ...known, specificPlaces: fallbackSpecificPlaces },
@@ -4991,7 +5124,7 @@ REGLAS PARA "accommodationStatus":
       }))
     }, {
       attempts: 1,
-      timeoutMs: 8000
+      timeoutMs: 6000
     })
 
     if (!response || !response.ok) {
@@ -5752,7 +5885,7 @@ REGLAS PARA "accommodationStatus":
 
     // Cuando el usuario ordena explícitamente construir el tour y toda la información clave está completa,
     // readyToBuild DEBE ser true de inmediato (la orden del usuario tiene prioridad sobre cualquier pregunta retórica del bot).
-    const effectiveReadyToBuild = Boolean(
+    let effectiveReadyToBuild = Boolean(
       isAllKeyInfoComplete &&
       (isUserExplicitlyOrderingBuild || (isBotConfirmingBuild && !isBotAskingOrProposing))
     )
@@ -5829,17 +5962,32 @@ REGLAS PARA "accommodationStatus":
     // canonical identity rules as the structured map payload.
     const allTrustedPlaces = [
       ...(realCatalog?.candidateCatalog?.places || []),
-      ...(realCatalog?.candidateCatalog?.restaurants || []),
-      ...(realCatalog?.candidateCatalog?.all || []),
-      ...(Array.isArray(known.specificPlaces) ? known.specificPlaces : [])
-    ]
-    responseMessage = await sanitizeChatItineraryTextWithOsm(
+      ...(realCatalog?.candidateCatalog?.restaurants || [])
+    ].filter(place => isQualifiedChatItineraryPlace(place))
+    const sanitizePromise = sanitizeChatItineraryTextWithOsm(
       responseMessage,
       destName || known.city || known.destination || '',
       destCountry,
       parsedExtracted.selectedHotel || known.selectedHotel,
       allTrustedPlaces
     )
+    const osmSanitizedMessage = await resolveWithin(sanitizePromise, 3000, null)
+    if (osmSanitizedMessage !== null) {
+      responseMessage = osmSanitizedMessage
+    } else {
+      responseMessage = keepOnlyTrustedChatPlacesInText(
+        responseMessage,
+        destName || known.city || known.destination || '',
+        parsedExtracted.selectedHotel || known.selectedHotel,
+        allTrustedPlaces
+      )
+      const hasTrustedItineraryStops = /^\s*(?:[•●▪◦*-]|\d+[.)])\s+\S+/m.test(responseMessage)
+      if (/itinerario\s+de\s+viaje|(?:^|\n)\s*d[ií]a\s+1\s*:/i.test(responseMessage) && !hasTrustedItineraryStops) {
+        responseMessage = `Sigo verificando lugares turísticos reales en ${destName || 'el destino'}. No incluiré paradas que no pueda confirmar; inténtalo de nuevo en unos segundos.`
+        effectiveReadyToBuild = false
+        actionChips = actionChips.filter(chip => !/generar tour|crear tour|construir tour/i.test(chip))
+      }
+    }
 
     if (!isLocationToDestination && isOneDayTour && /D[íi]a\s+1\s*:/i.test(responseMessage)) {
       responseMessage = ensureCompleteOneDayItineraryText(

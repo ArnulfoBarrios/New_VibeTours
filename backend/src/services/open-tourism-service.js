@@ -65,18 +65,18 @@ export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted
   const mergedTags = { ...(tags || {}) }
   const hasDedicatedWikidata = Boolean(mergedTags.wikidata || mergedTags['brand:wikidata'] || mergedTags.wikipedia)
   if (HIGH_VALUE_LANDMARK_KEYWORDS.test(cleanName)) return false
-
-  const isParkNamed = /^(parque|plazoleta|zona\s+recreativa)\b/i.test(cleanName) || String(mergedTags.leisure || '').toLowerCase() === 'park'
-  if (isParkNamed) {
-    if (ICONIC_TOURIST_PARK_KEYWORDS.test(cleanName) || hasDedicatedWikidata) return false
-    return true
-  }
-
-  if (wikipediaTrusted) return false
   const hasTourismTag = ['attraction', 'museum', 'viewpoint', 'theme_park', 'zoo', 'aquarium', 'gallery', 'artwork'].includes(
     String(mergedTags.tourism || '').toLowerCase()
   )
   const hasHistoricTag = Boolean(mergedTags.historic)
+
+  const isParkNamed = /^(parque|plazoleta|zona\s+recreativa)\b/i.test(cleanName) || String(mergedTags.leisure || '').toLowerCase() === 'park'
+  if (isParkNamed) {
+    if (ICONIC_TOURIST_PARK_KEYWORDS.test(cleanName) || hasDedicatedWikidata || hasTourismTag || hasHistoricTag) return false
+    return true
+  }
+
+  if (wikipediaTrusted) return false
   if (hasTourismTag || hasHistoricTag) return false
   return false
 }
@@ -141,6 +141,17 @@ export function scoreTouristAttraction(place = {}, wikipediaKeySet = new Set()) 
   if (!name) return -1000
   if (isGenericFacilityName(name)) return -1000
   const tags = { ...(place.tags || {}), ...(place.rawTags || {}) }
+  const normalizedName = normalizeTextKey(name)
+  const tourism = String(tags.tourism || '').toLowerCase()
+  const lodgingTypes = [place.entityType, place.category, place.type, tags.tourism, tags.accommodation]
+    .map(value => String(value || '').toLowerCase())
+  if (
+    lodgingTypes.some(type => ['hotel', 'hostel', 'guest_house', 'guesthouse', 'motel', 'apartment', 'camp_site', 'caravan_site', 'lodge', 'lodging'].includes(type)) ||
+    /\b(unidad\s+residencial|conjunto\s+residencial|complejo\s+residencial|urbanizaci[oó]n|condominio|residencial|apartamentos?|torre\s+\d+|manzana\s+[a-z\d]+|bloque\s+\d+)\b/i.test(normalizedName) ||
+    /\b(hotel|hostal|hostel|resort|apartahotel|motel|alojamiento|hospedaje)\b/i.test(normalizedName)
+  ) {
+    return -1000
+  }
   const normName = normalizeTextKey(name)
 
   const isWikiMatched =
@@ -152,12 +163,11 @@ export function scoreTouristAttraction(place = {}, wikipediaKeySet = new Set()) 
     return -120
   }
 
-  let score = 10
+  let score = 0
   if (isWikiMatched) score += 120
   if (tags.wikidata || tags.wikipedia) score += 90
   if (HIGH_VALUE_LANDMARK_KEYWORDS.test(name)) score += 75
 
-  const tourism = String(tags.tourism || '').toLowerCase()
   const historic = String(tags.historic || '').toLowerCase()
   const amenity = String(tags.amenity || '').toLowerCase()
   if (['attraction', 'museum', 'viewpoint', 'theme_park', 'zoo', 'gallery'].includes(tourism)) score += 65
@@ -181,8 +191,10 @@ export function rankAndFilterTouristAttractions(places = [], wikipediaLandmarks 
       touristScore: scoreTouristAttraction(p, wikiSet)
     }))
 
-  const highQuality = scored.filter((p) => p.touristScore > 0)
-  const sourceList = highQuality.length >= 3 ? highQuality : scored.filter((p) => !NEIGHBORHOOD_PARK_MARKERS.test(p.name || ''))
+  // A real map point is not automatically a tourist attraction. Require a
+  // tourism, heritage, Wikipedia, or clearly recognizable landmark signal so
+  // residential buildings and ordinary facilities cannot fill long itineraries.
+  const sourceList = scored.filter((p) => p.touristScore >= 35)
 
   const sorted = sourceList.sort((a, b) => b.touristScore - a.touristScore)
   const deduped = []

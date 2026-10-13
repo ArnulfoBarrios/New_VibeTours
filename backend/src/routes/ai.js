@@ -8,7 +8,7 @@ import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetch
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
-import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, cleanLandmarkOrPlaceName, FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
+import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, cleanLandmarkOrPlaceName, FALLBACK_DESTINATION_CENTROIDS, evaluateTourRequirements } from '../services/destinationService.js'
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 import { getCandidateId } from '../services/candidate-catalog.js'
 import { lookupCachedPlacesForCity, saveCachedPlacesBatch } from '../services/places-cache-service.js'
@@ -41,6 +41,16 @@ import {
 import { searchTomTomPlaces } from '../services/tomtom.js'
 
 export const aiRouter = Router()
+
+function awaitWithin(promise, timeoutMs, fallback = null) {
+  let timer
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise(resolve => {
+      timer = setTimeout(() => resolve(fallback), timeoutMs)
+    })
+  ]).finally(() => clearTimeout(timer))
+}
 
 function readPlanCandidateId(stop) {
   if (!stop || typeof stop !== 'object') return ''
@@ -210,24 +220,29 @@ function suggestDestinationCorrections(query) {
 }
 
 function getDestinationCorrectionSuggestions(query, canonical) {
+  const likelyCorrections = suggestDestinationCorrections(query)
+  if (likelyCorrections.length > 0) return likelyCorrections.slice(0, 3)
   const geocoderSuggestions = Array.isArray(canonical?.candidates)
     ? canonical.candidates.map(candidate => candidate.displayName || candidate.city).filter(Boolean)
     : []
-  return [...new Set([...geocoderSuggestions, ...suggestDestinationCorrections(query)])].slice(0, 3)
+  return [...new Set(geocoderSuggestions)].slice(0, 3)
 }
 
 function buildDestinationConfirmationResponse(query, canonical, preferences) {
   const suggestions = getDestinationCorrectionSuggestions(query, canonical)
   const cleanQuery = String(query || '').trim()
+  const hasLikelyTypoCorrection = canonical?.isAmbiguous && suggestDestinationCorrections(query).length > 0
   let responseMessage
-  if (canonical?.isAmbiguous) {
+  if (hasLikelyTypoCorrection) {
+    responseMessage = `No pude identificar una ciudad única llamada “${cleanQuery}”. ¿Quizá quisiste decir ${suggestions[0]}? Si no, dime también el departamento o país.`
+  } else if (canonical?.isAmbiguous) {
     responseMessage = `Encontré más de un lugar llamado “${cleanQuery}”. ¿Cuál de estas ciudades querías indicar?`
   } else if (!canonical) {
     responseMessage = `No pude ubicar “${cleanQuery}” como una ciudad. ¿Podrías revisar el nombre o decirme también el departamento o país?`
   } else {
     responseMessage = `No pude confirmar “${cleanQuery}” como una ciudad con suficiente confianza. ¿Podrías revisar si la escribiste bien?`
   }
-  if (suggestions.length > 0) {
+  if (suggestions.length > 0 && !hasLikelyTypoCorrection) {
     responseMessage += ` Tal vez quisiste decir: ${suggestions.join(', ')}.`
   }
 
@@ -818,9 +833,10 @@ aiRouter.post('/chat', async (req, res, next) => {
       : (existingCanonicalIsUsable
         ? Promise.resolve(existingCanonical)
         : resolveCanonicalDestination(preloadDestination).catch(() => null))
-    const catalogWarmup = (!isLocationRequestEarly && isExplicitBuildOrItineraryRequest && preloadDestinationKey)
+    const catalogWarmup = (!isLocationRequestEarly && !currentPreferences.destinationAwaitingConfirmation && preloadDestinationKey)
       ? canonicalWarmup.then(canonical => {
-          if (!canonical || !Number.isFinite(Number(canonical.latitude)) || !Number.isFinite(Number(canonical.longitude))) {
+          if (!canonical || canonical.isAmbiguous || canonical.isLowConfidence ||
+              !Number.isFinite(Number(canonical.latitude)) || !Number.isFinite(Number(canonical.longitude))) {
             return null
           }
           return getRealDestinationCatalog(
@@ -835,6 +851,10 @@ aiRouter.post('/chat', async (req, res, next) => {
           ).catch(() => null)
         })
       : Promise.resolve(null)
+
+    // Gather verified places while the chat collects any remaining trip details.
+    // The catalog service coalesces requests for the same destination and trip length.
+    void catalogWarmup
 
     // 1. Extraer preferencias de forma ultrarrápida (single-pass: intención + extracción determinista en 0ms)
     const intentEval = classifyUserIntent(message, currentPreferences)
@@ -1272,8 +1292,8 @@ aiRouter.post('/chat', async (req, res, next) => {
           )
             ? existingCanonical
             : preloadDestinationKey === rawDestinationKey
-              ? await canonicalWarmup
-              : await resolveCanonicalDestination(rawDest)
+              ? await awaitWithin(canonicalWarmup, 4500, null)
+              : await awaitWithin(resolveCanonicalDestination(rawDest), 4500, null)
         }
         const explicitlyConfirmsPendingDestination = Boolean(
           currentPreferences.destinationAwaitingConfirmation &&
@@ -1393,7 +1413,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.destination
     )
     const warmedCanonical = updatedDestinationKey && preloadDestinationKey
-      ? await canonicalWarmup
+      ? await awaitWithin(canonicalWarmup, 1200, null)
       : null
     const warmedCanonicalKey = destinationKey(
       warmedCanonical?.city || warmedCanonical?.entityName
@@ -1406,11 +1426,13 @@ aiRouter.post('/chat', async (req, res, next) => {
       const isExplicitHotelInquiry = /\b(recomi[eé]ndame hoteles|qu[eé] hoteles|opciones de hotel|d[oó]nde hospedarm[eé]|d[oó]nde quedarm[eé]|recomiendas alg[uú]n hotel|informaci[oó]n del? hotel)\b/i.test(message)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(message)
       const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(message)
-      const needsCatalogImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitAttractionInquiry || isExplicitBuildRequest || Boolean(updatedPreferences?.readyToBuild)
+      const updatedRequirements = evaluateTourRequirements(updatedPreferences)
+      const tripIsReadyForCatalog = Boolean(updatedPreferences?.readyToBuild || updatedRequirements.isComplete)
+      const needsCatalogImmediate = isExplicitHotelInquiry || isExplicitAttractionInquiry ||
+        (tripIsReadyForCatalog && (isExplicitItineraryRequest || isExplicitBuildRequest))
 
-      if (needsCatalogImmediate) {
-        await catalogWarmup
-      }
+      // Catalog warming happens in the background; the response path applies its own bounded wait.
+      void needsCatalogImmediate
     }
 
     // 2. Realizar búsqueda en vivo solo si el usuario pregunta explícitamente
@@ -1557,7 +1579,13 @@ aiRouter.post('/chat', async (req, res, next) => {
         )
         const chatCatalogLat = updatedPreferences.canonicalDestination?.latitude ?? null
         const chatCatalogLon = updatedPreferences.canonicalDestination?.longitude ?? null
-        const chatCatalog = (!isLocationRoute && chatCity) ? await getRealDestinationCatalog(chatCity, chatCountry, chatCatalogLat, chatCatalogLon, { requestedDays: maxDay || 7, tourType: updatedPreferences.tourType }).catch(() => null) : null
+        const chatCatalog = (!isLocationRoute && chatCity)
+          ? await awaitWithin(
+              getRealDestinationCatalog(chatCity, chatCountry, chatCatalogLat, chatCatalogLon, { requestedDays: maxDay || 7, tourType: updatedPreferences.tourType }).catch(() => null),
+              1500,
+              null
+            )
+          : null
         const aiSpecifics = Array.isArray(aiResponse.extractedPreferences?.specificPlaces)
           ? aiResponse.extractedPreferences.specificPlaces
           : []
@@ -1730,11 +1758,11 @@ aiRouter.post('/chat', async (req, res, next) => {
         arePlacesSimilar(updatedPreferences.canonicalDestination.city || updatedPreferences.canonicalDestination.entity || '', postAiCity)
       if (!hasMatchingCanonical) {
         try {
-          const resolvedPostCanonical = await resolveCanonicalDestination(
+          const resolvedPostCanonical = await awaitWithin(resolveCanonicalDestination(
             `${postAiCity}${updatedPreferences.country ? `, ${updatedPreferences.country}` : ''}`,
             null,
             null
-          )
+          ), 1200, null)
           if (resolvedPostCanonical?.latitude && resolvedPostCanonical?.longitude) {
             updatedPreferences.canonicalDestination = resolvedPostCanonical
             updatedPreferences.latitude = resolvedPostCanonical.latitude
@@ -1808,13 +1836,21 @@ aiRouter.post('/chat', async (req, res, next) => {
       let validatedSpecifics = combinedSpecifics
       const chatValidationCity = updatedPreferences.city || updatedPreferences.destination || updatedPreferences.destinationPlace || ''
       if (validatedSpecifics.length > 0 && chatValidationCity && !isLocationRoute) {
-        validatedSpecifics = await filterChatSpecificPlacesByOsm(
+        const verificationResult = await awaitWithin(filterChatSpecificPlacesByOsm(
           validatedSpecifics,
           chatValidationCity,
           updatedPreferences.country || '',
           updatedPreferences.selectedHotel || null,
-          { tourType: updatedPreferences.tourType }
-        )
+          {
+            tourType: updatedPreferences.tourType,
+            latitude: updatedPreferences.canonicalDestination?.latitude ?? updatedPreferences.latitude,
+            longitude: updatedPreferences.canonicalDestination?.longitude ?? updatedPreferences.longitude,
+            canonicalDestination: updatedPreferences.canonicalDestination
+          }
+        ), 3000, null)
+        validatedSpecifics = Array.isArray(verificationResult)
+          ? verificationResult
+          : validatedSpecifics.filter(place => typeof place === 'object' && place?.coordinatesVerified === true)
       }
       const curatedDestinationKey = isCoastalIslandsTour(updatedPreferences)
         ? getCuratedCoastalDestinationKey(updatedPreferences.city || updatedPreferences.destination || updatedPreferences.destinationPlace || '')
