@@ -23,6 +23,9 @@ class TourQuotaRepository {
   /// Fetches the current tour quota for a user.
   /// If [userId] is null or empty, treats as an unauthenticated guest.
   Future<TourQuota> getQuota({String? userId}) async {
+    if (kDebugMode) {
+      return TourQuota.initialAuthenticated();
+    }
     if (userId == null || userId.trim().isEmpty) {
       final guestCount = _prefs.getInt(guestTourCreatedKey) ?? 0;
       return TourQuota.guest(createdCount: guestCount);

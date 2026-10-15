@@ -1091,6 +1091,44 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'bulevar del rio': { name: 'Bulevar del Río Cali', latitude: 3.4530, longitude: -76.5330, city: 'Cali', country: 'Colombia', category: 'cultural' },
   'platillos voladores': { name: 'Restaurante Ringlete y Platillos Voladores', latitude: 3.4600, longitude: -76.5335, city: 'Cali', country: 'Colombia', category: 'restaurant' },
 
+  // Guatapé & El Peñol
+  'piedra del penol': { name: 'Piedra del Peñol', latitude: 6.2209, longitude: -75.1795, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'la piedra del penol': { name: 'Piedra del Peñol', latitude: 6.2209, longitude: -75.1795, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'penol de guatape': { name: 'Piedra del Peñol', latitude: 6.2209, longitude: -75.1795, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'plaza de los zocalos': { name: 'Plaza de los Zócalos', latitude: 6.2330, longitude: -75.1565, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'culture' },
+  'malecon de guatape': { name: 'Malecón de Guatapé', latitude: 6.2345, longitude: -75.1580, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'viewpoint' },
+  'parque principal de guatape': { name: 'Parque Principal de Guatapé', latitude: 6.2333, longitude: -75.1578, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'culture' },
+  'calle del recuerdo': { name: 'Calle del Recuerdo', latitude: 6.2325, longitude: -75.1570, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'culture' },
+  'embalse penol-guatape': { name: 'Embalse Peñol-Guatapé', latitude: 6.2310, longitude: -75.1600, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'embalse de guatape': { name: 'Embalse Peñol-Guatapé', latitude: 6.2310, longitude: -75.1600, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'casa museo historica de guatape': { name: 'Casa Museo Histórica de Guatapé', latitude: 6.2328, longitude: -75.1572, city: 'Guatapé', country: 'Colombia', coordinatesVerified: true, category: 'culture' },
+  'restaurante tierra querida': { name: 'Restaurante Tierra Querida', latitude: 6.2332, longitude: -75.1568, city: 'Guatapé', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
+  'restaurante el mirador guatape': { name: 'Restaurante El Mirador Guatapé', latitude: 6.2340, longitude: -75.1575, city: 'Guatapé', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
+  'restaurante la fogata guatape': { name: 'Restaurante La Fogata Guatapé', latitude: 6.2336, longitude: -75.1570, city: 'Guatapé', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
+
+  // Coveñas & Tolú (Coastal Micro-Destinations)
+  'playa primera ensenada': { name: 'Playa Primera Ensenada', latitude: 9.406388, longitude: -75.669701, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'primera ensenada': { name: 'Playa Primera Ensenada', latitude: 9.406388, longitude: -75.669701, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'playa segunda ensenada': { name: 'Playa Segunda Ensenada', latitude: 9.424386, longitude: -75.640120, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'segunda ensenada': { name: 'Playa Segunda Ensenada', latitude: 9.424386, longitude: -75.640120, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'cienaga la caimanera': { name: 'Ciénaga La Caimanera', latitude: 9.409630, longitude: -75.628090, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'cienaga de la caimanera': { name: 'Ciénaga La Caimanera', latitude: 9.409630, longitude: -75.628090, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'sector de acceso a la cienaga la caimanera': { name: 'Sector de acceso a la Ciénaga La Caimanera', latitude: 9.434738, longitude: -75.628461, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'parque especializado la caimanera': { name: 'Parque Especializado La Caimanera', latitude: 9.437261, longitude: -75.629786, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'punta de piedra': { name: 'Punta de Piedra', latitude: 9.420390, longitude: -75.651520, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'playa el frances': { name: 'Playa El Francés', latitude: 9.566067, longitude: -75.573737, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'playas del frances': { name: 'Playa El Francés', latitude: 9.566067, longitude: -75.573737, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'playa del malecon y zona de embarcaderos': { name: 'Playa del Malecón y zona de embarcaderos', latitude: 9.522041, longitude: -75.586262, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'malecon de tolu': { name: 'Playa del Malecón y zona de embarcaderos', latitude: 9.522041, longitude: -75.586262, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'plaza pedro de heredia, parque principal': { name: 'Plaza Pedro de Heredia, parque principal', latitude: 9.524000, longitude: -75.584250, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'culture' },
+  'iglesia de santiago apostol': { name: 'Iglesia de Santiago Apóstol', latitude: 9.524001, longitude: -75.583651, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'isla tintipan': { name: 'Isla Tintipán', latitude: 9.793790, longitude: -75.842970, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'isla mucura': { name: 'Isla Múcura', latitude: 9.781780, longitude: -75.872520, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'restaurante el pargo rojo': { name: 'Restaurante El Pargo Rojo', latitude: 9.4100, longitude: -75.6600, city: 'Coveñas', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
+  'restaurante don rua': { name: 'Restaurante Don Rúa', latitude: 9.4120, longitude: -75.6550, city: 'Coveñas', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
+  'restaurante el galeon tolu': { name: 'Restaurante El Galeón Tolú', latitude: 9.5230, longitude: -75.5850, city: 'Tolú', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
+  'restaurante bar el muelle': { name: 'Restaurante Bar El Muelle', latitude: 9.5225, longitude: -75.5860, city: 'Tolú', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
+
   // International Iconic Landmarks
   'museo del prado': { name: 'Museo Nacional del Prado', latitude: 40.4138, longitude: -3.6921, city: 'Madrid', country: 'España' },
   'museo nacional del prado': { name: 'Museo Nacional del Prado', latitude: 40.4138, longitude: -3.6921, city: 'Madrid', country: 'España' },
@@ -1794,9 +1832,9 @@ const OVERPASS_SERVERS = [
 let overpassServerCursor = 0
 const attractionsCache = new GeoCache(30 * 60 * 1000, 300)
 
-async function fetchOverpassWithMirrors(query, timeoutMs = 4000, options = {}) {
+async function fetchOverpassWithMirrors(query, timeoutMs = 3500, options = {}) {
   const startIndex = overpassServerCursor++ % OVERPASS_SERVERS.length
-  if (options.parallelFallbacks) {
+  if (options.parallelFallbacks !== false) {
     const controllers = OVERPASS_SERVERS.map(() => new AbortController())
     const deadline = setTimeout(() => controllers.forEach(controller => controller.abort()), timeoutMs)
     const attempts = OVERPASS_SERVERS.map(async (_serverUrl, index) => {
@@ -2665,9 +2703,30 @@ export function arePlacesSimilar(a, b) {
     if (strippedA.length >= 8 && strippedB.length >= 8 && (strippedA.includes(strippedB) || strippedB.includes(strippedA))) return true
   }
 
-  // Direct containment for sufficiently long strings
-  if (normA.length >= 8 && normB.length >= 8 && (normA.includes(normB) || normB.includes(normA))) {
-    return true
+  const latA = typeof a === 'object' ? Number(a?.latitude ?? a?.lat) : NaN
+  const lonA = typeof a === 'object' ? Number(a?.longitude ?? a?.lon ?? a?.lng) : NaN
+  const latB = typeof b === 'object' ? Number(b?.latitude ?? b?.lat) : NaN
+  const lonB = typeof b === 'object' ? Number(b?.longitude ?? b?.lon ?? b?.lng) : NaN
+  const hasCoordsA = !Number.isNaN(latA) && !Number.isNaN(lonA) && (latA !== 0 || lonA !== 0)
+  const hasCoordsB = !Number.isNaN(latB) && !Number.isNaN(lonB) && (latB !== 0 || lonB !== 0)
+  if (hasCoordsA && hasCoordsB) {
+    const distMeters = haversineMeters(latA, lonA, latB, lonB)
+    if (distMeters > 1500) {
+      return false
+    }
+  }
+
+  // Direct containment for sufficiently long strings (requires high coverage so e.g. "santander" doesn't swallow "casa natal de santander")
+  if (normA.length >= 8 && normB.length >= 8) {
+    const longer = normA.length >= normB.length ? normA : normB
+    const shorter = normA.length >= normB.length ? normB : normA
+    if (longer.includes(shorter)) {
+      const remainder = longer.replace(shorter, '').trim()
+      const allowedRemainder = /^(?:de\s+la|de\s+los|de\s+las|del|de|la|el|los|las|y|norte|sur|este|oeste|central|sector\s+\d+|etapa\s+\d+|1|2|3|\s+)*$/i
+      if (remainder.length === 0 || allowedRemainder.test(remainder)) {
+        return true
+      }
+    }
   }
 
   // Strip cross-typology prefixes to extract geographic/landmark core
@@ -2685,7 +2744,17 @@ export function arePlacesSimilar(a, b) {
 
   if (pA && pB) {
     if (pA === pB && pA.length >= 4) return true
-    if (pA.length >= 5 && pB.length >= 5 && (pA.includes(pB) || pB.includes(pA))) return true
+    if (pA.length >= 5 && pB.length >= 5) {
+      const longer = pA.length >= pB.length ? pA : pB
+      const shorter = pA.length >= pB.length ? pB : pA
+      if (longer.includes(shorter)) {
+        const remainder = longer.replace(shorter, '').trim()
+        const allowedRemainder = /^(?:de\s+la|de\s+los|de\s+las|del|de|la|el|los|las|y|norte|sur|este|oeste|central|nuevo|nueva|antiguo|antigua|viejo|vieja|alto|alta|bajo|baja|grande|chico|1|2|3|\s+)*$/i
+        if (remainder.length === 0 || allowedRemainder.test(remainder)) {
+          return true
+        }
+      }
+    }
   }
 
   // Check token overlap for distinctive words (length >= 4)

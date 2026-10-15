@@ -253,8 +253,8 @@ test('effectiveReadyToBuild must trigger when user requests tour generation and 
 
   const stateItinerario = {
     history: [
-      { role: 'user', content: 'Quiero viajar a Barranquilla' },
-      { role: 'assistant', content: 'Itinerario de 3 días...' },
+      { role: 'user', content: 'Quiero viajar a Santa Marta' },
+      { role: 'assistant', content: 'Itinerario de 4 días...' },
       { role: 'user', content: 'Okay ahora sí genera el itinerario' }
     ]
   }

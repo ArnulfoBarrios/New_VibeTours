@@ -279,7 +279,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         if (lat != null) 'latitude': lat,
         // ignore: use_null_aware_elements
         if (lon != null) 'longitude': lon,
-      }, timeout: const Duration(seconds: 25));
+      }, timeout: const Duration(seconds: 45));
 
       if (requestSequence != _chatRequestSequence) return;
 
@@ -1158,6 +1158,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
             s['is_fallback_image'] == true ||
             s['isDemoImage'] == true ||
             s['is_demo_image'] == true ||
+            s['es_imagen_demo'] == true ||
             s['isReferenceImage'] == true,
       );
     }).toList();

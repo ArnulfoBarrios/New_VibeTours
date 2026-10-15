@@ -13,7 +13,7 @@ function normalizeDestination(value) {
   const normalized = normalizePlaceName(value)
   const covenas = /\bcovenas\b/.test(normalized)
   const tolu = /\btolu\b/.test(normalized)
-  if (covenas === tolu) return ''
+  if (!covenas && !tolu) return ''
   return covenas ? 'covenas' : 'tolu'
 }
 

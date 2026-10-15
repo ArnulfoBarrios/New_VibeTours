@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,7 @@ class QuotaEnforcement {
     BuildContext context,
     WidgetRef ref,
   ) async {
+    if (kDebugMode) return true;
     final quota = await ref.read(tourQuotaProvider.future);
 
     // 1. Quota is still available -> allow creation

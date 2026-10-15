@@ -275,19 +275,40 @@ export function inferTourType(input = {}, extracted = null) {
 }
 
 export function evaluateTourRequirements(input = {}, extracted = null) {
-  const merged = { ...input, ...(extracted || {}) }
+  const cleanExtracted = {}
+  if (extracted && typeof extracted === 'object') {
+    for (const [k, v] of Object.entries(extracted)) {
+      if (v !== null && v !== undefined && v !== '') {
+        cleanExtracted[k] = v
+      }
+    }
+  }
+  const merged = { ...input, ...cleanExtracted }
   const tourType = inferTourType(input, extracted)
 
   const city = String(merged.city || merged.destination || merged.destinationPlace || '').trim()
   const hasCity = Boolean(city.length >= 2 || (Array.isArray(merged.cities) && merged.cities.length > 0))
 
   const isExpressOrOneDay = tourType === 'express_tour' ||
+    tourType === 'location_to_destination' ||
+    Boolean(merged.isUserLocationOrigin) ||
     Number(merged.durationDays) === 1 ||
     (Number(merged.durationHours) > 0 && Number(merged.durationHours) <= 24) ||
     /\b(un\s+d[íi]a|1\s+d[íi]a|tour\s+express|express|por\s+el\s+d[íi]a|pasa\s*d[íi]a|pasad[íi]a)\b/i.test(`${merged.datesSeason || ''} ${merged.prompt || ''}`)
 
-  const hasTransport = Boolean(merged.transport && String(merged.transport).trim().length > 0 && !/por definir|pendiente/i.test(String(merged.transport)))
-  const hasBudget = Boolean(merged.budget && String(merged.budget).trim().length > 0 && !/por definir|pendiente/i.test(String(merged.budget)))
+  const isExplicitBuild = Boolean(
+    merged.readyToBuild ||
+    /\b(confirmar(\s+y)?\s+(?:generar|crear)|generar(\s+el)?\s+tour|crear(\s+el)?\s+tour)\b/i.test(merged.prompt || '')
+  )
+
+  const hasTransport = Boolean(
+    (merged.transport && String(merged.transport).trim().length > 0 && !/por definir|pendiente/i.test(String(merged.transport))) ||
+    isExplicitBuild
+  )
+  const hasBudget = Boolean(
+    (merged.budget && String(merged.budget).trim().length > 0 && !/por definir|pendiente/i.test(String(merged.budget))) ||
+    isExplicitBuild
+  )
 
   // Dates: For 1-day/express tours, dates are optional / not required to build
   const hasDates = isExpressOrOneDay

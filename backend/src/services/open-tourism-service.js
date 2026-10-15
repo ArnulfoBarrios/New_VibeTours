@@ -87,8 +87,9 @@ export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   if (/\b(comidas?\s+r[aá]pidas?|comodas?\s+rapidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|pollo\s+frito|sir\s+pollo|mis\s+carnes|qbano|s[aá]ndwich\s+qbano|tostao'?|cosechas|sr\.?\s*wok|chop\s*suey|submarina|autoservicio|auto\s+servicio|arepas?\s+rellenas?|empanadas?|jugos\s+la\s+jarra|^jugos\b|fruter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|billares|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|cafeter[ií]a\s+y\s+restaurante|restaurante\s+y\s+cafeter[ií]a|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
     return true
   }
-  // Reject religious shrines, monuments, statues, and recreational clubs misclassified as restaurants
-  if (/\b(virgen|santuario|monumento|escultura|estatua|busto|catedral|parroquia|iglesia|capilla|ermita|recreaciones\s+club|club\s+recreativ\w*|club\s+de\s+\w+)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|caf[ée]|bar|parrilla|asador|cocina)\b/i.test(cleanName)) {
+  // Reject religious shrines, monuments, statues, and recreational clubs ONLY when evaluating restaurants
+  const isEvaluatingRestaurant = tags?.category === 'restaurant' || tags?.entityType === 'restaurant' || tags?.forRestaurant === true || tags?.isRestaurant === true
+  if (isEvaluatingRestaurant && /\b(virgen|santuario|monumento|escultura|estatua|busto|catedral|parroquia|iglesia|capilla|ermita|recreaciones\s+club|club\s+recreativ\w*|club\s+de\s+\w+)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|caf[ée]|bar|parrilla|asador|cocina)\b/i.test(cleanName)) {
     return true
   }
   // Reject non-culinary ambiguous names or neighborhood shops
@@ -508,7 +509,11 @@ export function arePlaceNamesSemanticallySame(nameA = '', nameB = '', city = '')
 
   // 4. Shared eponymous hero/patron (e.g. "Parque Bolívar" and "Museo Casa Bolívar" or "Plaza Bolívar" in the same tour)
   if (nonTypeIntersection.length === 1 && EPONYMOUS_HERO_TOKENS.has(nonTypeIntersection[0])) {
-    return true
+    const nonTypeA = stemmedA.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
+    const nonTypeB = stemmedB.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
+    if (nonTypeA.length === 1 && nonTypeB.length === 1) {
+      return true
+    }
   }
 
   return false
@@ -1909,15 +1914,25 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     }
   }
 
-  // When the city has fewer than two attractions per day, use one distinct
-  // attraction on each available day and never recycle one to fill the rest.
-  const sparseAttractionInventory = numDays > 1 && cleanAttractions.length < numDays * 2
-  const minRequiredPerDay = isExpressExpanded ? 5 : (numDays === 1 ? 4 : (sparseAttractionInventory ? 1 : 2))
+  // Ensure we have at least numDays clusters so no day is left blank
+  if (clusters.length > 0 && clusters.length < numDays) {
+    const flatPool = clusters.flat()
+    let poolIdx = 0
+    while (clusters.length < numDays) {
+      const stop = flatPool[poolIdx % flatPool.length]
+      clusters.push([{ ...stop }])
+      poolIdx++
+    }
+  }
+
+  // When the city has fewer than two attractions per day, use distinct attractions
+  // and draw from cleanAttractions to ensure each day has at least 2 attractions.
+  const minRequiredPerDay = isExpressExpanded ? 5 : (numDays === 1 ? 4 : 2)
   const globallyAssignedNames = new Set(
     clusters.slice(0, numDays).flatMap(c => c.map(s => (s?.name || '').toLowerCase())).filter(Boolean)
   )
   for (let i = 0; i < clusters.length && i < numDays; i++) {
-    while (clusters[i].length < minRequiredPerDay && cleanAttractions.length > clusters[i].length) {
+    while (clusters[i].length < minRequiredPerDay && cleanAttractions.length > 0) {
       const existingNames = new Set(clusters[i].map(s => (s.name || '').toLowerCase()))
       const partner = cleanAttractions.find(a =>
         a && a.name &&
@@ -1930,13 +1945,26 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
         clusters[i].push(partner)
         globallyAssignedNames.add(partner.name.toLowerCase())
       } else {
-        break
+        // Fallback for sparse inventory: draw another distinct candidate from cleanAttractions to meet 2 stops per day
+        const fallbackPartner = cleanAttractions.find(a =>
+          a && a.name &&
+          !existingNames.has(a.name.toLowerCase()) &&
+          !clusters[i].some(existing => arePlaceNamesSemanticallySame(existing.name, a.name, city)) &&
+          (numDays !== 1 || clusters[i].every(existing => areStopsCompatibleInSameDay(existing, a, cityCenter, city)))
+        )
+        if (fallbackPartner) {
+          clusters[i].push({ ...fallbackPartner })
+        } else if (cleanAttractions.length > 0 && clusters[i].length < minRequiredPerDay) {
+          const anyCand = cleanAttractions.find(a => a && a.name && !existingNames.has(a.name.toLowerCase())) || cleanAttractions[0]
+          clusters[i].push({ ...anyCand })
+        } else {
+          break
+        }
       }
     }
   }
 
-  // Add a real restaurant only to a day that already has an attraction. In a
-  // sparse itinerary it can be the second stop, but never a third filler stop.
+  // Add a real restaurant only to a day that already has an attraction.
   const usedRests = new Set()
   const days = []
 
@@ -1969,9 +1997,23 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       }
     }
 
-    if (chosenRest && sparseAttractionInventory && dayAttractions.length >= 2) {
-      chosenRest = null
+    // Fallback: If all unique restaurants have been used once, cycle from cleanRestaurants
+    if (!chosenRest && cleanRestaurants.length > 0 && dayAttractions.length > 0) {
+      let bestCycleDist = Infinity
+      for (const rest of cleanRestaurants) {
+        if (dayAttractions.some((a) => arePlaceNamesSemanticallySame(a.name, rest.name, city))) continue
+        const dist = calculateHaversineKm(dayLat, dayLon, rest.latitude, rest.longitude)
+        const scoreDist = dist != null ? dist : 15
+        if (scoreDist < bestCycleDist) {
+          bestCycleDist = scoreDist
+          chosenRest = rest
+        }
+      }
+      if (!chosenRest) {
+        chosenRest = cleanRestaurants[(d - 1) % cleanRestaurants.length]
+      }
     }
+
     if (chosenRest) {
       usedRests.add(chosenRest.name.toLowerCase())
     }

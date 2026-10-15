@@ -812,7 +812,7 @@ aiRouter.post('/chat', async (req, res, next) => {
     // explícitamente confirme o solicite armar el itinerario / tour.
     const isExplicitBuildOrItineraryRequest = Boolean(
       currentPreferences?.readyToBuild ||
-      /\b(gener(ar|es|a|e|en|al)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|armar?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|c[oó]mo\s+(va|queda)\s+(el\s+|mi\s+)?itinerario|mostrar?\s+(el\s+|mi\s+)?itinerario|mu[eé]strame\s+(el\s+|mi\s+)?itinerario|ver\s+(el\s+|mi\s+)?itinerario|plan\s+de\s+viaje|detalles\s+del\s+d[íi]a)\b/i.test(message)
+      /\b(confirmar\s+y\s+(?:generar|crear)(\s+(?:el|un))?\s+tour|gener(ar|es|a|e|en|al)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|armar?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|c[oó]mo\s+(va|queda)\s+(el\s+|mi\s+)?itinerario|mostrar?\s+(el\s+|mi\s+)?itinerario|mu[eé]strame\s+(el\s+|mi\s+)?itinerario|ver\s+(el\s+|mi\s+)?itinerario|plan\s+de\s+viaje|detalles\s+del\s+d[íi]a)\b/i.test(message)
     )
     const existingCanonical = currentPreferences.canonicalDestination
     const preloadDestination = existingCanonical?.city ||
@@ -971,7 +971,11 @@ aiRouter.post('/chat', async (req, res, next) => {
                /\b(parque|reserva|isla|playa|valle|mirador)\b/i.test(dest)
       }
 
-      if (isSubordinateParkOrAttraction(validExtracted.destination) || (newDest && newDest !== existingBaseCity)) {
+      if (isExplicitBuildOrItineraryRequest) {
+        delete validExtracted.city
+        delete validExtracted.destination
+        delete validExtracted.canonicalDestination
+      } else if (isSubordinateParkOrAttraction(validExtracted.destination) || (newDest && newDest !== existingBaseCity)) {
         console.info(`[ai/chat] Preserving base hub destination "${currentPreferences.destination || currentPreferences.city}" - keeping mentioned "${validExtracted.destination || validExtracted.city}" as a day stop.`)
         
         if (validExtracted.destination && !/^(santa marta|cartagena|medell[íi]n|bogot[áa])$/i.test(validExtracted.destination) && isValidRouteEndpoint(validExtracted.destination)) {
@@ -984,10 +988,12 @@ aiRouter.post('/chat', async (req, res, next) => {
         delete validExtracted.city
         delete validExtracted.destination
         delete validExtracted.canonicalDestination
-        delete validExtracted.originPlace
-        delete validExtracted.destinationPlace
-        delete validExtracted.cities
-        validExtracted.isMultiCity = false
+        if (!currentPreferences.isMultiCity) {
+          delete validExtracted.originPlace
+          delete validExtracted.destinationPlace
+          delete validExtracted.cities
+          validExtracted.isMultiCity = false
+        }
       }
     } else if (!hasExistingCity && validExtracted.destination) {
       const isSubordinateParkOrAttraction = (dest) => {
@@ -1028,7 +1034,13 @@ aiRouter.post('/chat', async (req, res, next) => {
 
     // Después de pedir una corrección de destino, aceptar una respuesta breve
     // como "Cali" aunque el extractor no la haya clasificado como ciudad.
-    if (currentPreferences.destinationAwaitingConfirmation && !validExtracted.city && !validExtracted.destination) {
+    const isControlOrConfirmPhrase = isExplicitBuildOrItineraryRequest ||
+      /\b(confirmar|generar|crear|iniciar|comenzar|adelante|listo|paradas?|actividad|presupuesto|transporte|alojamiento|hotel)\b/i.test(message)
+    const destNeedsClarification = Boolean(
+      currentPreferences.destinationAwaitingConfirmation &&
+      (!currentPreferences.destination || currentPreferences.destination === currentPreferences.unconfirmedDestination)
+    )
+    if (destNeedsClarification && !isControlOrConfirmPhrase && !validExtracted.city && !validExtracted.destination) {
       const replyCandidate = cleanAdministrativeCityName(
         message.trim()
           .replace(/^(?:no[,;:]?\s*)?(?:quise decir|quería decir|me refería a|la ciudad es|sería|es|mejor)\s+/i, '')
@@ -1044,6 +1056,15 @@ aiRouter.post('/chat', async (req, res, next) => {
     const updatedPreferences = {
       ...currentPreferences,
       ...validExtracted
+    }
+
+    if (isExplicitBuildOrItineraryRequest) {
+      if (!updatedPreferences.transport || /por definir|pendiente/i.test(String(updatedPreferences.transport))) {
+        updatedPreferences.transport = 'A pie / Taxi local'
+      }
+      if (!updatedPreferences.budget || /por definir|pendiente/i.test(String(updatedPreferences.budget))) {
+        updatedPreferences.budget = 'Moderado'
+      }
     }
     const priorDestinationKey = destinationKey(
       currentPreferences.canonicalDestination?.city ||
@@ -1224,12 +1245,31 @@ aiRouter.post('/chat', async (req, res, next) => {
     })
 
     // Resolve Canonical Destination if city/destination is present
+    const wasMultiCity = Boolean(
+      currentPreferences.isMultiCity ||
+      (currentPreferences.originPlace && currentPreferences.destinationPlace && isValidRouteEndpoint(currentPreferences.originPlace) && isValidRouteEndpoint(currentPreferences.destinationPlace))
+    )
+    if (wasMultiCity && !isExplicitCityChange && !isExplicitLocationToDestination) {
+      if (!updatedPreferences.originPlace && currentPreferences.originPlace) {
+        updatedPreferences.originPlace = currentPreferences.originPlace
+      }
+      if (!updatedPreferences.destinationPlace && currentPreferences.destinationPlace) {
+        updatedPreferences.destinationPlace = currentPreferences.destinationPlace
+      }
+      if ((!updatedPreferences.cities || updatedPreferences.cities.length === 0) && Array.isArray(currentPreferences.cities) && currentPreferences.cities.length > 0) {
+        updatedPreferences.cities = [...currentPreferences.cities]
+      }
+      if (isValidRouteEndpoint(updatedPreferences.originPlace) && isValidRouteEndpoint(updatedPreferences.destinationPlace)) {
+        updatedPreferences.isMultiCity = true
+      }
+    }
+
     if (updatedPreferences.isMultiCity && (!isValidRouteEndpoint(updatedPreferences.originPlace) || !isValidRouteEndpoint(updatedPreferences.destinationPlace))) {
       updatedPreferences.isMultiCity = false
       delete updatedPreferences.originPlace
       delete updatedPreferences.destinationPlace
       delete updatedPreferences.cities
-      if (currentPreferences.destination) {
+      if (currentPreferences.destination && !currentPreferences.destination.includes(' a ')) {
         updatedPreferences.destination = currentPreferences.destination
         updatedPreferences.city = currentPreferences.city || currentPreferences.destination
       }
@@ -1246,7 +1286,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.country = updatedPreferences.countries.join(', ')
     } else {
       let rawDest = updatedPreferences.destination || updatedPreferences.city
-      if (!rawDest && currentPreferences.destinationAwaitingConfirmation) {
+      if (!rawDest && currentPreferences.destinationAwaitingConfirmation && (!currentPreferences.destination || currentPreferences.destination === currentPreferences.unconfirmedDestination)) {
         const pendingQuery = currentPreferences.unconfirmedDestination || ''
         return res.json(buildDestinationConfirmationResponse(pendingQuery, null, updatedPreferences))
       }
@@ -1336,8 +1376,8 @@ aiRouter.post('/chat', async (req, res, next) => {
           return res.json(buildDestinationConfirmationResponse(rawDest, canonical, updatedPreferences))
         }
 
-        delete updatedPreferences.destinationAwaitingConfirmation
-        delete updatedPreferences.unconfirmedDestination
+        updatedPreferences.destinationAwaitingConfirmation = false
+        updatedPreferences.unconfirmedDestination = null
         if (canonical) {
           // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
           const isLocationToDest = Boolean(
@@ -2277,6 +2317,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     const recommendations = await Promise.all(
       planner.selectedPlaces.map(async (place, index) => {
         let imageUrl = place.imageUrl || place.images?.[0] || ''
+        let isDemo = Boolean(place.isDemoImage || place.es_imagen_demo)
         if (!imageUrl || assignedUrls.has(imageUrl)) {
           try {
             const imgRes = await Promise.race([
@@ -2288,11 +2329,15 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
               }),
               new Promise(resolve => setTimeout(() => resolve({ url: '', isFallback: true }), 2500))
             ])
-            imageUrl = imgRes.url
+            if (imgRes?.url) {
+              imageUrl = imgRes.url
+              isDemo = Boolean(imgRes.isFallback)
+            }
           } catch (_) {}
         }
         if (!imageUrl) {
           imageUrl = getReliableCategoryFallbackImage(place.name, place.category, assignedUrls)
+          isDemo = true
         }
         assignedUrls.add(imageUrl)
 
@@ -2314,6 +2359,8 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
           destination: place.destination || input.destination || input.city || '',
           curatedDestinationKey: place.curatedDestinationKey || '',
           imageUrl,
+          isDemoImage: isDemo,
+          es_imagen_demo: isDemo,
           description: placeDesc,
           reason: buildRecommendationReason(place, input, aiReason),
           durationMinutes: place.minutes || 25,
@@ -2427,10 +2474,18 @@ aiRouter.post('/tours/build', async (req, res, next) => {
       input.originPlace === 'user_current_location' ||
       input.tourType === 'location_to_destination'
     )
-    const destQuery = input.city || input.destination || ''
+    const targetDestinationName = (isUserOriginBuild || input.destinationPlace || input.tourType === 'city_to_city')
+      ? (input.destinationPlace || input.destination || input.city || '')
+      : (input.city || input.destination || input.destinationPlace || '')
+    const destQuery = targetDestinationName
+    if (isUserOriginBuild && targetDestinationName) {
+      input.destination = targetDestinationName
+      input.destinationPlace = targetDestinationName
+      input.city = targetDestinationName
+    }
     const firstPlaceWithCoords = Array.isArray(places) ? places.find(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude))) : null
 
-    if (!isUserOriginBuild && destQuery) {
+    if (destQuery) {
       const canonical = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude && arePlacesSimilar(input.canonicalDestination.city || input.canonicalDestination.displayName || '', destQuery))
         ? input.canonicalDestination
         : await resolveCanonicalDestination(destQuery).catch(() => null)
@@ -2844,10 +2899,18 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
   }
 
   const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
-  const destQuery = input.city || input.destination || ''
+  const targetDestinationName = (isUserOrigin || input.destinationPlace || input.tourType === 'city_to_city')
+    ? (input.destinationPlace || input.destination || input.city || '')
+    : (input.city || input.destination || input.destinationPlace || '')
+  const destQuery = targetDestinationName
+  if (isUserOrigin && targetDestinationName) {
+    input.destination = targetDestinationName
+    input.destinationPlace = targetDestinationName
+    input.city = targetDestinationName
+  }
   const firstConfirmedWithCoords = Array.isArray(confirmedPlaces) ? confirmedPlaces.find(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude))) : null
 
-  if (!isUserOrigin && destQuery) {
+  if (destQuery) {
     const canonical = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude && arePlacesSimilar(input.canonicalDestination.city || input.canonicalDestination.displayName || '', destQuery))
       ? input.canonicalDestination
       : await resolveCanonicalDestination(destQuery).catch(() => null)
@@ -3195,7 +3258,10 @@ async function processTourGeneration(jobId, input) {
       } else if (input.destinationPlace) {
         targetQuery = input.destinationPlace
       }
-      const queryParts = [...new Set([targetQuery, input.city, input.country].filter(Boolean))]
+      const isCrossCityQuery = isUserOrigin || Boolean(input.destinationPlace) || input.tourType === 'city_to_city'
+      const queryParts = isCrossCityQuery
+        ? [...new Set([targetQuery, input.country].filter(Boolean))]
+        : [...new Set([targetQuery, input.city, input.country].filter(Boolean))]
       canonicalDest = await resolveCanonicalDestination(queryParts.join(', '), { countryHint: input.country })
     }
 
@@ -3237,11 +3303,8 @@ async function processTourGeneration(jobId, input) {
       allowNearbyMunicipalities: geographicScopeFor(input).allowNearbyMunicipalities
     }
     input.canonicalDestination = canonicalDest
-    const isUserOriginGen = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
-    if (!isUserOriginGen) {
-      input.latitude = canonicalDest.latitude
-      input.longitude = canonicalDest.longitude
-    }
+    input.latitude = canonicalDest.latitude
+    input.longitude = canonicalDest.longitude
     if (!input.isMultiCity && (!Array.isArray(input.cities) || input.cities.length <= 1)) {
       input.destination = canonicalDest.displayName
       input.city = canonicalDest.city
@@ -3785,6 +3848,7 @@ export function buildTourPlanner(input, location = null, places = []) {
     ? input.specificPlaces
     : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
 
+  let requestedPlaces = []
   let candidatePlaces = Array.isArray(places) && places.length > 0 ? [...places] : []
   if (candidatePlaces.length === 0 && !isCoastalIslands) {
     candidatePlaces = [...refList]
@@ -4044,7 +4108,7 @@ export function buildTourPlanner(input, location = null, places = []) {
       return false
     }
 
-    const requestedPlaces = []
+    requestedPlaces = []
     const otherPlaces = []
 
     for (const p of scored) {
@@ -4183,7 +4247,7 @@ export function buildTourPlanner(input, location = null, places = []) {
             if (!usedNames.has(key)) {
               usedNames.add(key)
               const filled = { ...cand, dia: d, day: d, category: cand.category || 'attraction' }
-              dayPlaces.unshift(filled)
+              dayPlaces.push(filled)
               currentAttractions.push(filled)
             }
           }
@@ -6228,7 +6292,7 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
     'cartagena': ['bocagrande', 'castillo san felipe', 'getsemani', 'islas del rosario', 'baru', 'la popa'],
     'barranquilla': ['malecon del rio', 'ventana al mundo', 'boca de ceniza', 'casa del carnaval', 'edgar renteria'],
     'santa marta': ['tayrona', 'rodadero', 'taganga', 'minca', 'quinta de san pedro', 'museo bolivariano'],
-    'medellin': ['comuna 13', 'pueblito paisa', 'parque botero', 'el penol', 'guatape'],
+    'medellin': ['comuna 13', 'pueblito paisa', 'parque botero'],
     'bogota': ['monserrate', 'la candelaria', 'plaza de bolivar', 'zipaquira']
   }
 
@@ -6358,9 +6422,12 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     : (input.latitude && input.longitude ? { latitude: input.latitude, longitude: input.longitude } : candidatePlaces[0])
   const geoScope = geographicScopeFor(input)
   const isRegionalOrNature = geoScope.isRegional
+  const targetCityForScope = (input.tourType === 'location_to_destination' || input.isUserLocationOrigin || input.tourType === 'city_to_city')
+    ? (input.destinationPlace || input.destination || input.city)
+    : (input.city || input.destination)
   const isValidCityPlace = await isPlaceBelongingToCity(
     resolvedName,
-    input.city || input.destination,
+    targetCityForScope,
     coordinates.latitude,
     coordinates.longitude,
     cityCenterCoords,
@@ -6597,6 +6664,8 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       ...(isCoastalStop ? [] : images),
       ...(image && !isVerifiedPhoto(image) ? [image] : [])
     ]),
+    es_imagen_demo: Boolean(isFallbackImg && !isVerifiedPhoto(image)),
+    isDemoImage: Boolean(isFallbackImg && !isVerifiedPhoto(image)),
   }
   const primaryStopImage = publicStop.imagenes[0] || image || ''
   const isVerifiedPrimary = isVerifiedPhoto(primaryStopImage)
@@ -7355,13 +7424,17 @@ export async function collectCorridorCandidates(input, location) {
     }
   }
   
+  const isCrossCity = Boolean(input.tourType === 'location_to_destination' || input.isUserLocationOrigin || input.tourType === 'city_to_city')
   const targetDest = input.destinationPlace || input.destination
   if (targetDest) {
     let destGeo = null
     if (location?.latitude && location?.longitude && (location.name?.toLowerCase().includes(targetDest.toLowerCase()) || targetDest.toLowerCase().includes(location.name?.toLowerCase()))) {
       destGeo = location
+    } else if (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude && arePlacesSimilar(input.canonicalDestination.city || input.canonicalDestination.displayName || '', targetDest)) {
+      destGeo = input.canonicalDestination
     } else {
-      destGeo = await geocodePlace(`${targetDest} ${city} ${country}`)
+      const geocodeTarget = isCrossCity ? `${targetDest} ${country}` : `${targetDest} ${city} ${country}`
+      destGeo = await geocodePlace(geocodeTarget)
     }
     if (destGeo) {
       endPlace = {
@@ -7370,8 +7443,8 @@ export async function collectCorridorCandidates(input, location) {
         longitude: destGeo.longitude,
         category: 'attraction',
         type: 'end_point',
-        city,
-        country,
+        city: destGeo.city || targetDest,
+        country: destGeo.country || country,
         tags: { end_point: 'true' }
       }
     }
@@ -7414,15 +7487,16 @@ export async function collectCorridorCandidates(input, location) {
   }
 
   // 2. Also search primary location and general city search
-  const query = `${input.destination || ''} ${city} ${country}`.trim()
+  const query = isCrossCity ? `${targetDest || input.destination || ''} ${country}`.trim() : `${input.destination || ''} ${city} ${country}`.trim()
   const photonPlaces = await photonSearch(query, 30)
-  const overpassPlaces = location ? await overpassAttractions(location.latitude, location.longitude, 10000) : []
+  const destLocation = endPlace || location
+  const overpassPlaces = destLocation ? await overpassAttractions(destLocation.latitude, destLocation.longitude, 10000) : []
   pool.push(...overpassPlaces, ...photonPlaces)
 
   // 3. Fetch iconic city landmarks if pool is small
   const iconicLandmarks = await fetchCityIconicLandmarks({
-    destination: input.destination || city,
-    city,
+    destination: isCrossCity ? (targetDest || input.destination) : (input.destination || city),
+    city: isCrossCity ? (targetDest || input.destination) : city,
     country,
     type: input.type,
     interests: input.touristInterests,
@@ -7431,7 +7505,7 @@ export async function collectCorridorCandidates(input, location) {
   if (Array.isArray(iconicLandmarks) && iconicLandmarks.length > 0) {
     const geocodedSettled = await Promise.allSettled(
       iconicLandmarks.map(async (item) => {
-        const searchQuery = `${item.name} ${city} ${country}`.trim()
+        const searchQuery = isCrossCity ? `${item.name} ${targetDest || input.destination} ${country}`.trim() : `${item.name} ${city} ${country}`.trim()
         const geo = await geocodePlace(searchQuery)
         if (geo && (geo.latitude || geo.longitude)) {
           return {
@@ -7443,7 +7517,7 @@ export async function collectCorridorCandidates(input, location) {
             coordinatesVerified: true,
             type: item.type || 'tourism',
             category: item.category || 'historic',
-            city: geo.city || city,
+            city: geo.city || (isCrossCity ? targetDest : city),
             country: geo.country || country,
             address: geo.name || `${city}, ${item.name}`,
             description: item.description || '',
@@ -7481,7 +7555,8 @@ export async function collectCorridorCandidates(input, location) {
         let placeId = typeof item === 'object' ? (item.placeId || '') : ''
 
         if (lat == null || lon == null) {
-          const geo = await geocodePlace(`${placeName} ${city} ${country}`.trim()).catch(() => null)
+          const geocodeQ = isCrossCity ? `${placeName} ${targetDest || input.destination || country}`.trim() : `${placeName} ${city} ${country}`.trim()
+          const geo = await geocodePlace(geocodeQ).catch(() => null)
           if (geo && Number.isFinite(Number(geo.latitude)) && Number.isFinite(Number(geo.longitude))) {
             lat = Number(geo.latitude)
             lon = Number(geo.longitude)
@@ -8678,7 +8753,8 @@ export function isValidTouristAttraction(place, input) {
   }
 
   // 0.0005 Bloqueo de cadenas de comida rápida, cafeterías genéricas y parques barriales menores como atractivo turístico
-  if (isLowQualityOrFastFoodVenue(name, place.tags || place.rawTags) || isNeighborhoodOrMinorPark(name, place.tags || place.rawTags)) {
+  const isCulturalOrReligiousAttraction = /\b(catedral|iglesia|santuario|monumento|museo|escultura|estatua|parque\s+cultural|templo|bas[ií]lica|mirador)\b/i.test(nameLower)
+  if (!isCulturalOrReligiousAttraction && (isLowQualityOrFastFoodVenue(name, place.tags || place.rawTags) || isNeighborhoodOrMinorPark(name, place.tags || place.rawTags))) {
     return false
   }
 
@@ -8719,18 +8795,20 @@ export function isValidTouristAttraction(place, input) {
   }
 
   // 0.1 EXCEPCIÓN DE ORO: Si es un lugar o restaurante acordado en el chat / seleccionado por el usuario, SIEMPRE es válido
+  const pKey = normalizePlaceKey(name)
   const isRequestedByChat = place.rawTags?.requested_place === 'true' || 
                            place.category === 'requested' || 
                            place.isUserSelected === true ||
+                           place.isRequested === true ||
                            (Array.isArray(input?.specificPlaces) && input.specificPlaces.some(sp => {
                              const spName = typeof sp === 'string' ? sp : (sp?.name || '')
                              const k = normalizePlaceKey(spName)
-                             return k && (k === nameKey || nameKey.includes(k) || k.includes(nameKey))
+                             return (k && pKey && (k === pKey || pKey.includes(k) || k.includes(pKey))) || arePlacesSimilar(name, spName)
                            })) ||
                            (Array.isArray(input?.selectedPlaces) && input.selectedPlaces.some(sp => {
                              const spName = typeof sp === 'string' ? sp : (sp?.name || '')
                              const k = normalizePlaceKey(spName)
-                             return k && (k === nameKey || nameKey.includes(k) || k.includes(nameKey))
+                             return (k && pKey && (k === pKey || pKey.includes(k) || k.includes(pKey))) || arePlacesSimilar(name, spName)
                            }))
 
   if (isRequestedByChat) {
