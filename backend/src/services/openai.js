@@ -1257,28 +1257,49 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
   const matches = [...text.matchAll(dayBlockRegex)]
   if (matches.length < 2) return text
 
-  const isFoodStop = (name) => {
-    if (!name) return false
-    return isFoodOrDrinkEstablishment(name) ||
-      /\b(restaurante|restaurant|asador|bistro|gastrobar|cevicher|parrilla|comedor|food\s*hall|caim[aá]n\s+del\s+r[ií]o|caf[eé]|panader[íi]a|pasteler[íi]a|helader[íi]a)\b/i.test(name)
-  }
-
   const normDest = String(destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-  const catalogAttractions = [
-    ...(realCatalog?.places || []),
-    ...(realCatalog?.candidateCatalog?.places || []),
-    ...(Array.isArray(parsedExtracted?.specificPlaces) ? parsedExtracted.specificPlaces.filter(p => p?.category !== 'restaurant' && p?.entityType !== 'restaurant' && p?.type !== 'food') : [])
-  ]
-    .map(p => typeof p === 'string' ? p.trim() : String(p?.name || '').trim())
-    .filter(name => name && !isFoodStop(name) && !isLowQualityOrFastFoodVenue(name) && !isGenericFacilityName(name) && !isNeighborhoodOrMinorPark(name))
+  const cleanKey = normDest.toLowerCase().trim()
 
-  const catalogRestaurants = [
+  const cityPresetRests = (DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[destName.toLowerCase()] || [])
+    .map(r => typeof r === 'string' ? r.trim() : String(r?.name || '').trim())
+    .filter(Boolean)
+
+  const rawCatalogRestaurants = [
     ...(realCatalog?.restaurants || []),
     ...(realCatalog?.candidateCatalog?.restaurants || []),
-    ...(Array.isArray(parsedExtracted?.specificPlaces) ? parsedExtracted.specificPlaces.filter(p => p?.category === 'restaurant' || p?.entityType === 'restaurant' || p?.type === 'food' || p?.isRestaurant) : [])
+    ...(Array.isArray(parsedExtracted?.specificPlaces) ? parsedExtracted.specificPlaces.filter(p => p?.category === 'restaurant' || p?.entityType === 'restaurant' || p?.type === 'food' || p?.isRestaurant) : []),
+    ...cityPresetRests
   ]
     .map(r => typeof r === 'string' ? r.trim() : String(r?.name || '').trim())
     .filter(name => name && !isLowQualityOrFastFoodVenue(name) && !isGenericFacilityName(name))
+
+  const catalogRestaurants = []
+  for (const r of rawCatalogRestaurants) {
+    if (!catalogRestaurants.some(existing => arePlaceNamesSemanticallySame(existing, r, destName))) {
+      catalogRestaurants.push(r)
+    }
+  }
+
+  const isFoodStop = (name) => {
+    if (!name || typeof name !== 'string') return false
+    const clean = name.trim().toLowerCase()
+    // Strict tourist landmarks are never food stops
+    if (/\b(museo|parque|teatro|catedral|bas[íi]lica|iglesia|mirador|monumento|plaza|plazoleta|estadio|puente|jard[íi]n|rosedal|cementerio|castillo|palacio|obelisco)\b/i.test(clean) &&
+        !/\b(restaurante|restaurant|caf[eé]|bistro|bar|parrilla|pizzer[íi]a)\b/i.test(clean)) {
+      return false
+    }
+    if (catalogRestaurants.some(r => arePlaceNamesSemanticallySame(r, name, destName))) return true
+    if (isFoodOrDrinkEstablishment(name)) return true
+    return /\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|parrilla|asador|asados|asadero|bistro|pizzer[íi]a|pizza|pizzas|panader[íi]a|pasteler[íi]a|reposter[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|food\s*hall|caim[aá]n\s+del\s+r[ií]o|cocina|comedor|piquetera|trattoria|osteria|steakhouse|diner|delicatessen|deli|brasserie|cantina|grill|rotisserie|tavern|taverna|bodega|izakaya|saz[oó]n|fog[oó]n|dulcer[íi]a|autoservicio|empanadas?|arepas?|jugos|fruter[íi]a|broaster|salchipapas)\b/i.test(clean)
+  }
+
+  const catalogAttractions = [
+    ...(realCatalog?.places || []),
+    ...(realCatalog?.candidateCatalog?.places || []),
+    ...(Array.isArray(parsedExtracted?.specificPlaces) ? parsedExtracted.specificPlaces.filter(p => p?.category !== 'restaurant' && p?.entityType !== 'restaurant' && p?.type !== 'food' && !p?.isRestaurant) : [])
+  ]
+    .map(p => typeof p === 'string' ? p.trim() : String(p?.name || '').trim())
+    .filter(name => name && !isFoodStop(name) && !isLowQualityOrFastFoodVenue(name) && !isGenericFacilityName(name) && !isNeighborhoodOrMinorPark(name))
 
   const parsedDays = matches.map(m => {
     const header = m[1]
@@ -1286,14 +1307,43 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
     const body = m[3]
     const rawStops = body
       .split(/\r?\n/)
-      .map(line => itineraryBulletPlaceName(line))
+      .map(line => {
+        const name = itineraryBulletPlaceName(line)
+        if (!name) return null
+        const isDiningLine = /\b(almuerzo|cena|desayuno|comida|merienda|gastronom[íi]a|degustaci[oó]n)\b/i.test(line)
+        return { name, isDiningLine }
+      })
       .filter(Boolean)
     return { fullMatch: m[0], header, dayNum, body, rawStops }
   })
 
+  // Harvest dining venues indicated by itinerary text lines into catalogRestaurants
+  for (const day of parsedDays) {
+    for (const stop of day.rawStops) {
+      if (stop.isDiningLine && !isFoodStop(stop.name)) {
+        const clean = stop.name.trim().toLowerCase()
+        const isLandmark = /\b(museo|parque|teatro|catedral|bas[íi]lica|iglesia|mirador|monumento|plaza|plazoleta|estadio|puente|jard[íi]n|rosedal|cementerio|castillo|palacio|obelisco)\b/i.test(clean)
+        if (!isLandmark && !isLowQualityOrFastFoodVenue(stop.name) && !isGenericFacilityName(stop.name)) {
+          if (!catalogRestaurants.some(r => arePlaceNamesSemanticallySame(r, stop.name, destName))) {
+            catalogRestaurants.push(stop.name)
+          }
+        }
+      }
+    }
+  }
+
   const totalDays = Math.max(Number(options.numDays) || 0, ...parsedDays.map(day => day.dayNum), 1)
   const existingByDay = new Map(parsedDays.map(day => [day.dayNum, day]))
+
+  const isRecognizedTouristLandmark = (name) => {
+    if (!name || typeof name !== 'string') return false
+    const clean = name.trim().toLowerCase()
+    if (catalogAttractions.some(ca => arePlaceNamesSemanticallySame(ca, name, destName))) return true
+    return /\b(museo|parque|mirador|monumento|catedral|iglesia|bas[íi]lica|santuario|bioparque|ecoparque|reserva|jard[íi]n|plaza|plazoleta|teatro|nevado|volc[aá]n|laguna|ci[ée]naga|termales|telef[ée]rico|cable\s+a[ée]reo|viaducto|puente|castillo|palacio|obelisco|malec[oó]n|zool[oó]gico|acuario|estadio|faro|muelle|playa|isla|bah[íi]a|arrecife|centro\s+cultural|biblioteca|ruinas?|murallas?|baluarte|fort[íi]n)\b/i.test(clean)
+  }
+
   const allAttractions = []
+  const allRestaurants = [...catalogRestaurants]
   const addUnique = (list, name) => {
     if (name && !list.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))) list.push(name)
   }
@@ -1301,14 +1351,21 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
     if (!name || typeof name !== 'string') return true
     return /\b(d[íi]a\s+libre|tarde\s+libre|ma[ñn]ana\s+libre|tiempo\s+libre|descanso|descansar|explorar\s+a\s+tu\s+ritmo|llegada|despedida|check[- ]in|check[- ]out|traslado|vuelo|retorno|regreso)\b/i.test(name)
   }
+
+  // 1. Prioritize verified iconic catalog attractions first
+  for (const name of catalogAttractions) addUnique(allAttractions, name)
   for (const day of parsedDays) {
     for (const stop of day.rawStops) {
-      if (!isNonPlaceStop(stop) && !isFoodStop(stop) && !isLowQualityOrFastFoodVenue(stop)) addUnique(allAttractions, stop)
+      const sName = stop.name
+      if (isNonPlaceStop(sName) || isLowQualityOrFastFoodVenue(sName) || isFoodStop(sName)) continue
+      if (isRecognizedTouristLandmark(sName)) {
+        addUnique(allAttractions, sName)
+      }
     }
   }
-  for (const name of catalogAttractions) addUnique(allAttractions, name)
 
   const usedNames = []
+  const surplusRestaurants = []
   const updatedDays = Array.from({ length: totalDays }, (_, index) => {
     const dayNum = index + 1
     const source = existingByDay.get(dayNum)
@@ -1316,19 +1373,27 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
     let food = null
     let hadLowQuality = false
     for (const stop of source?.rawStops || []) {
-      if (isNonPlaceStop(stop) || isLowQualityOrFastFoodVenue(stop)) {
+      const sName = stop.name
+      if (isNonPlaceStop(sName) || isLowQualityOrFastFoodVenue(sName)) {
         hadLowQuality = true
         continue
       }
-      if (usedNames.some(existing => arePlaceNamesSemanticallySame(existing, stop, destName))) continue
-      if (isFoodStop(stop)) {
+      if (usedNames.some(existing => arePlaceNamesSemanticallySame(existing, sName, destName))) continue
+      if (isFoodStop(sName)) {
         if (!food) {
-          food = stop
-          usedNames.push(stop)
+          food = sName
+          usedNames.push(sName)
+        } else {
+          if (!surplusRestaurants.some(existing => arePlaceNamesSemanticallySame(existing, sName, destName)) &&
+              !usedNames.some(existing => arePlaceNamesSemanticallySame(existing, sName, destName))) {
+            surplusRestaurants.push(sName)
+          }
         }
-      } else if (attrs.length < 2) {
-        attrs.push(stop)
-        usedNames.push(stop)
+      } else if (attrs.length < 2 && isRecognizedTouristLandmark(sName)) {
+        attrs.push(sName)
+        usedNames.push(sName)
+      } else if (!isRecognizedTouristLandmark(sName)) {
+        hadLowQuality = true
       }
     }
     return {
@@ -1338,7 +1403,7 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
       finalAttrs: attrs,
       finalFood: food,
       hadLowQuality,
-      originalStops: source?.rawStops || []
+      originalStops: (source?.rawStops || []).map(s => s.name)
     }
   })
 
@@ -1387,7 +1452,6 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
   }
 
   // 3. Pull additional iconic attractions if inventory is below totalDays * 2
-  const cleanKey = normDest.toLowerCase().trim()
   const cityPresets = DESTINATION_ICONIC_LANDMARKS[cleanKey] || []
   for (const presetName of cityPresets) {
     if (allAttractions.length >= totalDays * 2) break
@@ -1431,6 +1495,9 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
         usedNames.push(candidate)
       } else {
         const fallbackAttr = cityPresets.find(name =>
+          !usedNames.some(existing => arePlaceNamesSemanticallySame(existing, name, destName)) &&
+          !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
+        ) || cityPresets.find(name =>
           !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
         )
         if (fallbackAttr) {
@@ -1443,33 +1510,60 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
     }
   }
 
-  // Ensure every day gets 1 restaurant
-  const cityPresetRests = (DESTINATION_ICONIC_RESTAURANTS[cleanKey] || []).map(r => typeof r === 'string' ? r : r.name)
-  for (const pr of cityPresetRests) {
-    if (!catalogRestaurants.some(r => arePlaceNamesSemanticallySame(r, pr, destName))) {
-      catalogRestaurants.push(pr)
+  // 6. Ensure every day gets 1 unique restaurant without cross-day duplication
+  const candidateRestaurants = []
+  for (const r of [...surplusRestaurants, ...allRestaurants]) {
+    if (r && !candidateRestaurants.some(existing => arePlaceNamesSemanticallySame(existing, r, destName))) {
+      candidateRestaurants.push(r)
     }
+  }
+
+  // Pass A: Assign strictly UNUSED restaurants first across all days that lack finalFood
+  for (const day of updatedDays) {
+    if (day.finalFood) continue
+    const unusedRest = candidateRestaurants.find(name =>
+      !usedNames.some(existing => arePlaceNamesSemanticallySame(existing, name, destName)) &&
+      !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
+    )
+    if (unusedRest) {
+      day.finalFood = unusedRest
+      usedNames.push(unusedRest)
+    }
+  }
+
+  // Pass B: Only if candidate restaurants were completely exhausted (inventory < totalDays),
+  // distribute repetitions evenly using least-used counts without back-to-back repeats
+  const restUsageCount = (rName) => {
+    let count = 0
+    for (const d of updatedDays) {
+      if (d.finalFood && arePlaceNamesSemanticallySame(d.finalFood, rName, destName)) {
+        count++
+      }
+    }
+    return count
   }
 
   for (const day of updatedDays) {
     if (day.finalFood) continue
-    let restaurant = catalogRestaurants.find(name =>
-      !usedNames.some(existing => arePlaceNamesSemanticallySame(existing, name, destName)) &&
-      !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
-    )
-    if (!restaurant && catalogRestaurants.length > 0) {
-      restaurant = catalogRestaurants.find(name =>
-        !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
-      ) || catalogRestaurants[0]
-    }
-    if (!restaurant && cityPresetRests.length > 0) {
-      restaurant = cityPresetRests.find(name =>
-        !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
-      ) || cityPresetRests[0]
-    }
-    if (restaurant) {
-      day.finalFood = restaurant
-      usedNames.push(restaurant)
+    if (candidateRestaurants.length === 0) break
+
+    const available = candidateRestaurants
+      .filter(name => !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName)))
+      .sort((a, b) => restUsageCount(a) - restUsageCount(b))
+
+    if (available.length === 0) break
+
+    const prevDayFood = updatedDays.find(d => d.dayNum === day.dayNum - 1)?.finalFood
+    const nextDayFood = updatedDays.find(d => d.dayNum === day.dayNum + 1)?.finalFood
+
+    const bestRest = available.find(name =>
+      (!prevDayFood || !arePlaceNamesSemanticallySame(name, prevDayFood, destName)) &&
+      (!nextDayFood || !arePlaceNamesSemanticallySame(name, nextDayFood, destName))
+    ) || available[0]
+
+    if (bestRest) {
+      day.finalFood = bestRest
+      usedNames.push(bestRest)
     }
   }
 
@@ -3701,7 +3795,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const isKnownColombianCity = centroidCountry === 'Colombia' || /^(cartagena|santa marta|medellin|bogota|barranquilla|cali|covenas|tolu|san andres|bucaramanga|pereira|salento|guatape|villa de leyva|cucuta|manizales|armenia|pasto|villavicencio|ibague|neiva|popayan|monteria|valledupar|sincelejo|riohacha|tunja)$/i.test(knownCityNormalized)
   const destCountry = known.canonicalDestination?.country || known.country || centroidCountry || (isKnownColombianCity ? 'Colombia' : '')
 
-  const isDirectConfirmationOrBuild = /\b(confirmar(\s+y)?\s+(?:generar|crear|armar|construir)|gener(ar|es|a|e|en|al)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(?:el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+  const isBotAskingToConfirmBuild = /\b(deseas\s+confirmar\s+este\s+itinerario|generar\s+tu\s+tour\s+en\s+el\s+mapa|est[aá]\s+listo\s+para\s+generar|procedemos\s+a\s+generar|listo\s+para\s+generar\s+el\s+tour|qu[ée]\s+te\s+parece\s+este\s+itinerario|qu[ée]\s+te\s+parece\b|deseas\s+hacer\s+alg[uú]n\s+cambio)\b/i.test(lastAssistantMsg)
+  const isUserAffirmingConfirmation = hasItineraryAlreadyInHistory &&
+    (isBotAskingToConfirmBuild || targetStops.length >= 2) &&
+    /\b(s[íi]|confirmar?|confirmo|confirmado|de\s+acuerdo|est[áa]\s+bien|est[áa]\s+perfecto|perfecto|me\s+gusta|adelante|listo|dale|vale|proceder?|procede|claro|por\s+supuesto|me\s+parece\s+bien|todo\s+bien|excelente|vamos)\b/i.test(lastUserMsg)
+
+  const isDirectConfirmationOrBuild = isUserAffirmingConfirmation || /\b(confirmar(\s+y)?\s+(?:generar|crear|armar|construir)|gener(ar|es|a|e|en|al)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(?:el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
 
   const isModifyingOrRequestingItineraryEarly = /\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares|m[aá]s\s+(paradas|lugares|sitios|atractivos)|agregar|a[ñn]adir|quitar|eliminar|reemplazar)\b/i.test(lastUserMsg)
 
@@ -5159,6 +5258,10 @@ ${coastalIslands ? 'REFERENCIAS DE LUGARES' : 'CATÁLOGO VERIFICADO'} DE ${destN
 • Hoteles: ${realCatalog.hotels?.map(h => h.name).join(', ') || 'N/A'}
 • Restaurantes y bares: ${realCatalog.restaurants?.map(r => r.name).join(', ') || 'N/A'}
 • Atractivos y patrimonio: ${realCatalog.places?.map(p => typeof p === 'string' ? p : p?.name).filter(Boolean).join(', ') || 'N/A'}
+REGLA DE PRELACIÓN OBLIGATORIA DEL CATÁLOGO:
+- En tours de varios días, DEBES consumir prioritariamente y en orden los atractivos insignia de la lista 'Atractivos y patrimonio' antes de cualquier otro lugar, asignando exactamente 2 atractivos por día.
+- Para los restaurantes, DEBES elegir únicamente de la lista 'Restaurantes y bares', asignando exactamente 1 restaurante por día sin repetirlos.
+- ESTRICTAMENTE PROHIBIDO inventar o sustituir atractivos turísticos con bares, discotecas, locales comerciales o restaurantes secundarios que no pertenezcan al catálogo verificado.
 ` : ''}
 
 ${isCoastalIslandsTour(known) && getCuratedCoastalDestinationKey(destName) ? `EXCEPCIÓN CARTOGRÁFICA LOCAL PARA ${destName.toUpperCase()}:
@@ -5547,8 +5650,18 @@ REGLAS PARA "accommodationStatus":
       .replace(/([^\n])\s*(¿(?:Qué te parece|Deseas hacer))/gi, '$1\n\n$2')
       .trim()
 
+    const historicalStops = hasItineraryAlreadyInHistory
+      ? extractStopsFromItineraryText(itineraryAssistantMsg?.content || itineraryAssistantMsg?.text || '')
+      : []
+
     // Detección explícita de comando de generación enviado por el usuario
-    const isUserExplicitlyOrderingBuild = /\b(confirmar(\s+y)?\s+(?:generar|crear|armar|construir)|gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+    const isBotAskingToConfirmBuildAfter = /\b(deseas\s+confirmar\s+este\s+itinerario|generar\s+tu\s+tour\s+en\s+el\s+mapa|est[aá]\s+listo\s+para\s+generar|procedemos\s+a\s+generar|listo\s+para\s+generar\s+el\s+tour|qu[ée]\s+te\s+parece\s+este\s+itinerario|qu[ée]\s+te\s+parece\b|deseas\s+hacer\s+alg[uú]n\s+cambio)\b/i.test(lastAssistantMsg)
+    const isUserAffirmingConfirmationAfter = hasItineraryAlreadyInHistory &&
+      (isBotAskingToConfirmBuildAfter || historicalStops.length >= 2) &&
+      !isModifyingOrRequestingItineraryEarly &&
+      /\b(s[íi]|confirmar?|confirmo|confirmado|de\s+acuerdo|est[áa]\s+bien|est[áa]\s+perfecto|perfecto|me\s+gusta|adelante|listo|dale|vale|proceder?|procede|claro|por\s+supuesto|me\s+parece\s+bien|todo\s+bien|excelente|vamos)\b/i.test(lastUserMsg)
+
+    const isUserExplicitlyOrderingBuild = isUserAffirmingConfirmationAfter || /\b(confirmar(\s+y)?\s+(?:generar|crear|armar|construir)|gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
 
     // Detección de petición de agregar paradas
     const isGenericMoreStopsRequest = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales|agrega\s+m[aá]s|a[ñn]ade\s+m[aá]s|incluye\s+m[aá]s|agregar\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades)|a[ñn]adir\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades))\b/i.test(lastUserMsg)
@@ -5573,10 +5686,6 @@ REGLAS PARA "accommodationStatus":
     const isDetailInquiry = /\b(ver detalles|detalles|detalles del d[íi]a|c[oó]mo es el itinerario|ver itinerario|itinerario detallado|mostrar detalles)\b/i.test(lastUserMsg)
 
     const isModifyingOrRequestingItinerary = userRequestedItinerary || isUserAskingForMoreStops || isAddingStopsOrPlaces || isDetailInquiry
-
-    const historicalStops = hasItineraryAlreadyInHistory
-      ? extractStopsFromItineraryText(itineraryAssistantMsg?.content || itineraryAssistantMsg?.text || '')
-      : []
     const currentEmittedStops = extractStopsFromItineraryText(responseMessage)
     const isOneDayTourScope = Number(parsedExtracted.durationDays || known.durationDays || 0) === 1 || Boolean(isOneDayTour)
     const failedToExpandOneDayTour = isOneDayTourScope && isUserAskingForMoreStops && hasItineraryAlreadyInHistory && (
@@ -6165,8 +6274,13 @@ REGLAS PARA "accommodationStatus":
     }
 
     if (isUserExplicitlyOrderingBuild && isAllKeyInfoComplete) {
-      if (Array.isArray(known.specificPlaces) && known.specificPlaces.length >= 1) {
-        parsedExtracted.specificPlaces = known.specificPlaces
+      const bestHistoricalPlaces = (Array.isArray(known.specificPlaces) && known.specificPlaces.length >= 3)
+        ? known.specificPlaces
+        : ((Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length >= 3)
+          ? parsedExtracted.specificPlaces
+          : (historicalStops.length >= 3 ? historicalStops : (parsedExtracted.specificPlaces || [])))
+      if (bestHistoricalPlaces.length > 0) {
+        parsedExtracted.specificPlaces = bestHistoricalPlaces
       }
       responseMessage = `¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes tu viaje a ${destName || 'tu destino'}.`
       actionChips = [`🚀 Generar tour en ${destName || known.destination || 'el mapa'}`]
@@ -8005,8 +8119,21 @@ Devuelve ÚNICAMENTE un JSON válido con esta estructura:
     verifyCatalogEntriesOnOsm(discoveredRests, clean, country, Math.max(minRests, 12), lat, lon, 'restaurant')
   ])
 
-  const finalPlaces = verifiedPlaces.length >= 10 ? verifiedPlaces : discoveredPlaces.filter(p => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
-  const finalRests = verifiedRests.length >= 6 ? verifiedRests : discoveredRests.filter(r => Number.isFinite(r.latitude) && Number.isFinite(r.longitude))
+  const combinedPlaces = [...verifiedPlaces]
+  for (const dp of discoveredPlaces) {
+    if (Number.isFinite(dp.latitude) && Number.isFinite(dp.longitude) && !combinedPlaces.some(p => arePlacesSimilar(p.name, dp.name))) {
+      combinedPlaces.push(dp)
+    }
+  }
+  const finalPlaces = combinedPlaces.length >= 10 ? combinedPlaces : (verifiedPlaces.length > 0 ? verifiedPlaces : discoveredPlaces.filter(p => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)))
+
+  const combinedRests = [...verifiedRests]
+  for (const dr of discoveredRests) {
+    if (Number.isFinite(dr.latitude) && Number.isFinite(dr.longitude) && !combinedRests.some(r => arePlacesSimilar(r.name, dr.name))) {
+      combinedRests.push(dr)
+    }
+  }
+  const finalRests = combinedRests.length >= 6 ? combinedRests : (verifiedRests.length > 0 ? verifiedRests : discoveredRests.filter(r => Number.isFinite(r.latitude) && Number.isFinite(r.longitude)))
 
   // Persist verified items with source 'openai_iconic'
   saveCachedPlacesBatch(finalPlaces, clean, 'openai_iconic').catch(() => {})

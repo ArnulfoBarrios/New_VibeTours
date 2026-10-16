@@ -1672,8 +1672,8 @@ aiRouter.post('/chat', async (req, res, next) => {
             const rName = typeof r === 'string' ? r : (r?.name || '')
             return arePlacesSimilar(rName, poiName)
           })
-          const isFoodPattern = isFoodOrDrinkEstablishment(poiName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(poiName)
-          const isNonDiningVenue = !/^(?:restaurante|caf[ée]|bistro|asador)\s+/i.test(poiName) && /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|puente|bridge|ecoparque|ci[eé]naga|sendero|mirador|malec[oó]n|malecon|playa|estatua|obelisco|paseo|plaza|plazoleta|calle|avenida|bulevar)\b/i.test(poiName)
+          const isFoodPattern = isFoodOrDrinkEstablishment(poiName) || /\b(restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor)\b/i.test(poiName)
+          const isNonDiningVenue = !/^(?:restaurante|caf[ée]|bistro|asador)\s+/i.test(poiName) && /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|puente|bridge|ecoparque|ci[eé]naga|sendero|mirador|malec[oó]n|malecon|playa|estatua|obelisco|paseo|plaza|plazoleta|calle|avenida|bulevar|barrio)\b/i.test(poiName)
           const isDestinationPlace = arePlacesSimilar(poiName, updatedPreferences.destination || '') ||
             arePlacesSimilar(poiName, updatedPreferences.destinationPlace || '') ||
             Boolean(updatedPreferences.destination && poiName.toLowerCase().includes(updatedPreferences.destination.toLowerCase()))
@@ -1868,11 +1868,24 @@ aiRouter.post('/chat', async (req, res, next) => {
         ...extractedFromMsg
       ].filter(isAllowedChatSpecific)
 
-      const combinedSpecifics = (isConfirmedItineraryMsg && extractedFromMsg.length >= 2)
-        ? deduplicatePlacesByName(extractedFromMsg.filter(isAllowedChatSpecific))
-        : ((Array.isArray(aiResponse.specificPlaces) && aiResponse.specificPlaces.length >= 2)
-          ? deduplicatePlacesByName(aiResponse.specificPlaces.filter(isAllowedChatSpecific))
-          : deduplicatePlacesByName(rawCombined))
+      const aiPlaces = (Array.isArray(aiResponse.specificPlaces) && aiResponse.specificPlaces.length >= 2)
+        ? aiResponse.specificPlaces.filter(isAllowedChatSpecific)
+        : ((Array.isArray(aiResponse.extractedPreferences?.specificPlaces) && aiResponse.extractedPreferences.specificPlaces.length >= 2)
+          ? aiResponse.extractedPreferences.specificPlaces.filter(isAllowedChatSpecific)
+          : [])
+      const extractedPlaces = extractedFromMsg.filter(isAllowedChatSpecific)
+
+      let selectedSpecifics = []
+      if (aiPlaces.length >= extractedPlaces.length && aiPlaces.length >= 2) {
+        selectedSpecifics = aiPlaces
+      } else if (extractedPlaces.length >= 2) {
+        selectedSpecifics = extractedPlaces
+      } else if (aiPlaces.length > 0) {
+        selectedSpecifics = aiPlaces
+      } else {
+        selectedSpecifics = rawCombined
+      }
+      const combinedSpecifics = deduplicatePlacesByName(selectedSpecifics)
 
       let validatedSpecifics = combinedSpecifics
       const chatValidationCity = updatedPreferences.city || updatedPreferences.destination || updatedPreferences.destinationPlace || ''
@@ -1889,9 +1902,9 @@ aiRouter.post('/chat', async (req, res, next) => {
             canonicalDestination: updatedPreferences.canonicalDestination
           }
         ), 3000, null)
-        validatedSpecifics = Array.isArray(verificationResult)
+        validatedSpecifics = (Array.isArray(verificationResult) && verificationResult.length > 0)
           ? verificationResult
-          : validatedSpecifics.filter(place => typeof place === 'object' && place?.coordinatesVerified === true)
+          : validatedSpecifics
       }
       const curatedDestinationKey = isCoastalIslandsTour(updatedPreferences)
         ? getCuratedCoastalDestinationKey(updatedPreferences.city || updatedPreferences.destination || updatedPreferences.destinationPlace || '')
@@ -4225,10 +4238,11 @@ export function buildTourPlanner(input, location = null, places = []) {
           .filter(p => !isLowQualityOrFastFoodVenue(p.name, p.tags || p.rawTags) || isExplicitlyInUserPrompt(p.name))
           .map(p => isFoodStop(p) ? { ...p, category: 'restaurant', entityType: 'restaurant', type: 'food', isRestaurant: true } : p)
 
-        // If a day has multiple food stops and fewer than 2 real attractions, keep at most 1 sit-down restaurant so the day is not a list of eateries
+        // If a day has multiple food stops and fewer than 2 real attractions, keep at most 1 sit-down restaurant so the day is not a list of eateries (unless explicitly selected in chat)
+        const isDayFromChat = refList.length > 0 && dayPlaces.length > 0 && dayPlaces.every(p => refList.some(r => isPlaceMatching(p.name, getName(r))))
         const preAttractions = dayPlaces.filter(p => !isFoodStop(p))
         const preFoods = dayPlaces.filter(p => isFoodStop(p))
-        if (!isCoastalIslands && preAttractions.length < 2 && preFoods.length > 1) {
+        if (!isCoastalIslands && !isDayFromChat && preAttractions.length < 2 && preFoods.length > 1) {
           dayPlaces = [...preAttractions, preFoods[0]]
         }
         daysMap.set(d, dayPlaces)
@@ -6995,7 +7009,7 @@ function uniqueByName(values) {
   return values.filter((value) => {
     if (!value || !value.name) return false
     const rawType = (value.type || value.category || '').toLowerCase()
-    const isFood = rawType.includes('food') || rawType.includes('restaurant') || /restaurante|cafe|bistro|bar|comida/i.test(value.name)
+    const isFood = rawType.includes('food') || rawType.includes('restaurant') || /\b(restaurante|cafe|café|bistro|bar|comida)\b/i.test(value.name)
     const typePrefix = isFood ? 'food' : 'attraction'
     const key = `${typePrefix}_${canonicalPlaceKey(value.name, value.city || '')}`
     const fuzzyKey = `${typePrefix}_${fuzzyNormalizeKey(value.name)}`
@@ -7895,8 +7909,8 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        const isExplicitDining = (rawPlace && typeof rawPlace === 'object' && (rawPlace.isRestaurant || rawPlace.type === 'food' || rawPlace.category === 'restaurant' || rawPlace.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(placeName)
-        const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
+        const isExplicitDining = (rawPlace && typeof rawPlace === 'object' && (rawPlace.isRestaurant || rawPlace.type === 'food' || rawPlace.category === 'restaurant' || rawPlace.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /\b(restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor)\b/i.test(placeName)
+        const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|barrio|malecon|malecón|puente|mirador|plaza|plazoleta)\b/i.test(placeName)
         const isRestaurant = isExplicitDining && (!isCulturalVenue || (rawPlace && typeof rawPlace === 'object' && rawPlace.isRestaurant))
         const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
@@ -8150,8 +8164,8 @@ export async function collectTourCandidates(input, location) {
           continue
         }
 
-        const isExplicitDining = (typeof raw === 'object' && (raw.isRestaurant || raw.category === 'restaurant' || raw.type === 'food' || raw.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(placeName)
-        const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
+        const isExplicitDining = (typeof raw === 'object' && (raw.isRestaurant || raw.category === 'restaurant' || raw.type === 'food' || raw.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /\b(restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor)\b/i.test(placeName)
+        const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|barrio|malecon|malecón|puente|mirador|plaza|plazoleta)\b/i.test(placeName)
         const isRestaurant = isExplicitDining && (!isCulturalVenue || (typeof raw === 'object' && raw.isRestaurant))
         geocodedSpecifics.push({
           ...directGeo,
@@ -8202,16 +8216,8 @@ export async function collectTourCandidates(input, location) {
       let hasUnderfilledDay = false
       if (!isCoastal) {
         for (let d = 1; d <= totalRequestedDays; d++) {
-          const dayAttractions = geocodedSpecifics.filter(p =>
-            Number(p.dia || p.day || 1) === d &&
-            !p.isRestaurant &&
-            p.category !== 'restaurant' &&
-            p.type !== 'restaurant' &&
-            getPlaceEntityType(p.name) !== 'food' &&
-            !isFoodOrDrinkEstablishment(p.name, p.tags) &&
-            !isLowQualityOrFastFoodVenue(p.name, p.tags)
-          )
-          if (dayAttractions.length < 2) {
+          const dayStops = geocodedSpecifics.filter(p => Number(p.dia || p.day || 1) === d)
+          if (dayStops.length < (totalRequestedDays === 1 ? 2 : 3)) {
             hasUnderfilledDay = true
             break
           }

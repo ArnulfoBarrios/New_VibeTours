@@ -100,8 +100,8 @@ export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   if (/\b(calle|carrera|cra\.?|cll\.?|transversal|tv\.?|diagonal|dg\.?|avenida|autopista|manzana|lote)\s*\d+/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|parrilla|marisquer[ií]a|cevicher[ií]a)\b/i.test(cleanName)) {
     return true
   }
-  // Reject bare neighborhood/sector names without any culinary identifier (e.g. "El Prado", "Bocagrande", "Manga")
-  if (/^(?:el\s+prado|la\s+popa|pie\s+de\s+la\s+popa|manga|bocagrande|castillo\s+grande|getseman[ií]|centro|torices|crespo|marbella|barrio\s+.+|sector\s+.+|urbanizaci[oó]n\s+.+)$/i.test(cleanName)) {
+  // Reject bare neighborhood/sector names without any culinary identifier (e.g. "El Prado", "Bocagrande", "Manga") when evaluating dining venues
+  if (isEvaluatingRestaurant && /^(?:el\s+prado|la\s+popa|pie\s+de\s+la\s+popa|manga|bocagrande|castillo\s+grande|getseman[ií]|centro|torices|crespo|marbella|barrio\s+.+|sector\s+.+|urbanizaci[oó]n\s+.+)$/i.test(cleanName)) {
     return true
   }
   if (/\b(panader[ií]a|reposter[ií]a)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|trattoria|gastrobar)\b/i.test(cleanName)) {

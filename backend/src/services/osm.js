@@ -2156,14 +2156,14 @@ export function isFoodOrDrinkEstablishment(nameOrObj = '', tags = {}) {
   const unaccented = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   if (/\b(paradero|buseta|busetas|cootrans|cooptrans|despacho\s+de\s+buses|patio\s+de\s+buses|terminal\s+de\s+transporte)\b/i.test(unaccented)) return false
 
-  // Protect cultural/ecological landmarks whose names mention "Café" or "Cacao" (e.g. Parque del Café, Museo del Café, Paisaje Cultural Cafetero)
-  const isStrictTouristLandmark = /\b(parque|museo|mirador|monumento|catedral|iglesia|bas[íi]lica|santuario|bioparque|ecoparque|reserva|jard[íi]n|plaza|plazoleta|teatro|nevado|volc[aá]n|laguna|termales|paisaje\s+cultural|telef[ée]rico|cable\s+a[ée]reo|viaducto|puente)\b/i.test(clean) &&
+  // Protect cultural/ecological landmarks whose names mention "Café" or "Cacao" (e.g. Parque del Café, Museo del Café, Paisaje Cultural Cafetero, Barrio El Prado)
+  const isStrictTouristLandmark = /\b(parque|museo|mirador|monumento|catedral|iglesia|bas[íi]lica|santuario|bioparque|ecoparque|reserva|jard[íi]n|plaza|plazoleta|teatro|nevado|volc[aá]n|laguna|termales|paisaje\s+cultural|telef[ée]rico|cable\s+a[ée]reo|viaducto|puente|barrio|sector\s+hist[oó]rico|centro\s+hist[oó]rico)\b/i.test(clean) &&
     !/\b(restaurante|restaurant|cafeter[íi]a|parrilla|asador|pizzer[íi]a|gastrobar|autoservicio|frisby|subway|burger|kfc|mcdonald|comidas\s+r[aá]pidas|panader[íi]a|pasteler[íi]a|helader[íi]a|empanadas|arepas|sir\s+pollo|tostao|chop\s+suey|submarina)\b/i.test(clean)
   if (isStrictTouristLandmark) return false
 
   if (isLowQualityOrFastFoodVenue(name, mergedTags)) return true
 
-  if (/\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|parrilla|asador|asados|asadero|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera|trattoria|steakhouse|saz[oó]n|fog[oó]n|dulcer[íi]a|autoservicio|empanadas?|arepas?|jugos|fruter[íi]a|broaster|salchipapas)\b/i.test(clean)) return true
+  if (/\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|parrilla|asador|asados|asadero|bistro|pizzer[íi]a|pizza|pizzas|panader[íi]a|pasteler[íi]a|reposter[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera|trattoria|osteria|steakhouse|diner|delicatessen|deli|brasserie|cantina|grill|rotisserie|tavern|izakaya|saz[oó]n|fog[oó]n|dulcer[íi]a|autoservicio|empanadas?|arepas?|jugos|fruter[íi]a|broaster|salchipapas|rancho|ranchos|parador|paradores|chiringuito|fondas?)\b/i.test(clean)) return true
   if (/\b(frisby|subway|sir\s+pollo|tostao|cosechas|chop\s+suey|sr\s*wok|submarina|qbano|kfc|mcdonald|el\s+corral|presto|kokoriko|crepes\s*&\s*waffles|juan\s+valdez|starbucks|dunkin|cucayo|varadero|narcobollo|nena\s+lela|donde\s+chucho|ouzo|burukuka|celele|cande|(?:la\s+)?cevicheria|(?:el\s+)?caiman\s+del\s+rio|(?:la\s+)?herradura|donde\s+valerio|kiosko\s+el\s+pescador|(?:el\s+)?montanero)\b/i.test(unaccented)) return true
   return false
 }
