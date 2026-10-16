@@ -36,6 +36,7 @@ import {
   clusterStopsIntoCoherentDays,
   areStopsCompatibleInSameDay,
   arePlaceNamesSemanticallySame,
+  inferPlaceMicroSector,
   stemToken
 } from './open-tourism-service.js'
 
@@ -1329,7 +1330,36 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
     }
   })
 
-  // Fill one verified attraction on every day before adding a second anywhere.
+  // 1. Anti-dispersion pass: If existing attractions share the same micro-sector, group them on the SAME day first!
+  for (let i = 0; i < updatedDays.length; i++) {
+    for (const attrA of [...updatedDays[i].finalAttrs]) {
+      const infoA = inferPlaceMicroSector(attrA, null, destName)
+      if (!infoA.sectorTag) continue
+
+      for (let j = i + 1; j < updatedDays.length; j++) {
+        const partnerIdx = updatedDays[j].finalAttrs.findIndex(attrB => {
+          const infoB = inferPlaceMicroSector(attrB, null, destName)
+          return infoB.sectorTag === infoA.sectorTag
+        })
+        if (partnerIdx !== -1) {
+          const [partnerAttr] = updatedDays[j].finalAttrs.splice(partnerIdx, 1)
+          if (updatedDays[i].finalAttrs.length >= 2) {
+            const unlinkedIdx = updatedDays[i].finalAttrs.findIndex(a => {
+              const info = inferPlaceMicroSector(a, null, destName)
+              return info.sectorTag !== infoA.sectorTag
+            })
+            if (unlinkedIdx !== -1) {
+              const [swappedOut] = updatedDays[i].finalAttrs.splice(unlinkedIdx, 1)
+              updatedDays[j].finalAttrs.push(swappedOut)
+            }
+          }
+          updatedDays[i].finalAttrs.push(partnerAttr)
+        }
+      }
+    }
+  }
+
+  // 2. Fill one verified attraction on every day before adding a second anywhere.
   for (let targetCount = 1; targetCount <= 2; targetCount++) {
     for (const day of updatedDays) {
       if (day.finalAttrs.length >= targetCount) continue
@@ -1344,14 +1374,74 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
     }
   }
 
-  const sparseAttractionInventory = allAttractions.length < totalDays * 2
+  // 3. Pull additional iconic attractions if inventory is below totalDays * 2
+  const cleanKey = normDest.toLowerCase().trim()
+  const cityPresets = DESTINATION_ICONIC_LANDMARKS[cleanKey] || []
+  for (const presetName of cityPresets) {
+    if (allAttractions.length >= totalDays * 2) break
+    addUnique(allAttractions, presetName)
+  }
+
+  // 4. Fill up to 2 verified attractions on every day
+  for (let targetCount = 1; targetCount <= 2; targetCount++) {
+    for (const day of updatedDays) {
+      if (day.finalAttrs.length >= targetCount) continue
+      const candidate = allAttractions.find(name =>
+        !usedNames.some(existing => arePlaceNamesSemanticallySame(existing, name, destName)) &&
+        !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
+      )
+      if (candidate) {
+        day.finalAttrs.push(candidate)
+        usedNames.push(candidate)
+      }
+    }
+  }
+
+  // 5. Rebalancing pass: guarantee every day has exactly 2 attractions
+  for (let i = 0; i < updatedDays.length; i++) {
+    while (updatedDays[i].finalAttrs.length > 2) {
+      const recipient = updatedDays.find(d => d.finalAttrs.length < 2)
+      const excess = updatedDays[i].finalAttrs.pop()
+      if (recipient) {
+        recipient.finalAttrs.push(excess)
+      }
+    }
+  }
+
   for (const day of updatedDays) {
-    if (day.finalFood && sparseAttractionInventory && day.finalAttrs.length >= 2) day.finalFood = null
-    if (day.finalFood || day.finalAttrs.length === 0 || (sparseAttractionInventory && day.finalAttrs.length >= 2)) continue
-    const restaurant = catalogRestaurants.find(name =>
+    while (day.finalAttrs.length < 2) {
+      const candidate = allAttractions.find(name =>
+        !usedNames.some(existing => arePlaceNamesSemanticallySame(existing, name, destName)) &&
+        !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
+      )
+      if (candidate) {
+        day.finalAttrs.push(candidate)
+        usedNames.push(candidate)
+      } else {
+        break
+      }
+    }
+  }
+
+  // Ensure every day gets 1 restaurant
+  const cityPresetRests = (DESTINATION_ICONIC_RESTAURANTS[cleanKey] || []).map(r => typeof r === 'string' ? r : r.name)
+  for (const pr of cityPresetRests) {
+    if (!catalogRestaurants.some(r => arePlaceNamesSemanticallySame(r, pr, destName))) {
+      catalogRestaurants.push(pr)
+    }
+  }
+
+  for (const day of updatedDays) {
+    if (day.finalFood) continue
+    let restaurant = catalogRestaurants.find(name =>
       !usedNames.some(existing => arePlaceNamesSemanticallySame(existing, name, destName)) &&
       !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
     )
+    if (!restaurant && catalogRestaurants.length > 0) {
+      restaurant = catalogRestaurants.find(name =>
+        !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
+      ) || catalogRestaurants[0]
+    }
     if (restaurant) {
       day.finalFood = restaurant
       usedNames.push(restaurant)
@@ -1406,8 +1496,8 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
   if (parsedExtracted && typeof parsedExtracted === 'object') {
     const rebuiltSpecifics = []
     for (const d of updatedDays) {
-      const attrs = d.modified ? d.finalAttrs : d.rawStops.filter(s => !isFoodStop(s))
-      const food = d.modified ? d.finalFood : (d.rawStops.find(s => isFoodStop(s)) || null)
+      const attrs = d.finalAttrs.length > 0 ? d.finalAttrs : d.rawStops.filter(s => !isFoodStop(s))
+      const food = d.finalFood || (d.rawStops.find(s => isFoodStop(s)) || null)
       for (const a of attrs) {
         const coords = resolveCoordinatesForPlace(a, realCatalog?.coordinatesMap, realCatalog?.candidateCatalog?.places, parsedExtracted.specificPlaces)
         rebuiltSpecifics.push({
@@ -1581,6 +1671,72 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
     'Plaza Pedro de Heredia, parque principal',
     'Iglesia de Santiago Apóstol',
     'Sector Playa Hermosa'
+  ],
+  'bucaramanga': [
+    'Centro Cultural del Oriente',
+    'Parque Centenario',
+    'Teatro Santander',
+    'Catedral de la Sagrada Familia',
+    'Casa de Bolívar',
+    'Parque García Rovira',
+    'Teatro Corfescu',
+    'Parque del Agua',
+    'Parque San Pío',
+    'Parque de Las Palmas',
+    'Museo de Arte Moderno de Bucaramanga',
+    'Neomundo Centro de Convenciones',
+    'Parque La Flora',
+    'Jardín Botánico Eloy Valenzuela',
+    'Viaducto Provincial (La Novena)',
+    'Ecoparque Cerro del Santísimo'
+  ],
+  'medellin': [
+    'Plaza Botero',
+    'Museo de Antioquia',
+    'Parque Explora',
+    'Jardín Botánico de Medellín',
+    'Parque Arví',
+    'Pueblito Paisa',
+    'Comuna 13 Graffitour',
+    'Parque de los Pies Descalzos',
+    'Museo de Arte Moderno de Medellín (MAMM)',
+    'Catedral Basílica Metropolitana de Medellín',
+    'Parque El Poblado',
+    'Parque Lleras',
+    'Teatro Metropolitano de Medellín',
+    'Cerro Nutibara'
+  ],
+  'bogota': [
+    'Cerro de Monserrate',
+    'Museo del Oro',
+    'Plaza de Bolívar',
+    'Museo Botero',
+    'Barrio La Candelaria',
+    'Catedral Primada de Colombia',
+    'Jardín Botánico de Bogotá',
+    'Parque Metropolitano Simón Bolívar',
+    'Cerro de Guadalupe',
+    'Maloka Museo Interactivo',
+    'Museo Nacional de Colombia',
+    'Parque Central de Usaquén',
+    'Planetario de Bogotá',
+    'Teatro Colón'
+  ],
+  'cali': [
+    'Monumento a Cristo Rey',
+    'Zoológico de Cali',
+    'Barrio San Antonio de Cali',
+    'Iglesia La Ermita',
+    'Bulevar del Río Cali',
+    'Museo La Tertulia',
+    'Parque del Gato de Tejada',
+    'Monumento a Sebastián de Belalcázar',
+    'Parque de los Poetas',
+    'Catedral Metropolitana de San Pedro Apóstol',
+    'Cerro de las Tres Cruces',
+    'Parque Artesanal Loma de la Cruz',
+    'Teatro Municipal Enrique Buenaventura',
+    'Museo del Oro Calima'
   ]
 })
 
@@ -1633,6 +1789,54 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
   'tolu': [
     { name: 'Restaurante El Galeón Tolú', specialty: 'Mariscos frescos y cocina costeña' },
     { name: 'Restaurante Bar El Muelle', specialty: 'Pescado frito con vista a la playa' }
+  ],
+  'bucaramanga': [
+    { name: 'Restaurante Mercagán Parrilla', specialty: 'Carnes a la brasa y gastronomía santandereana' },
+    { name: 'La Puerta del Sol', specialty: 'Mute santandereano, cabrito y comida típica' },
+    { name: 'Restaurante El Maná', specialty: 'Almuerzos típicos y comida tradicional' },
+    { name: 'Battuto Ristorante', specialty: 'Cocina italiana artesanal y pastas' },
+    { name: 'Cinnamon Gourmet', specialty: 'Repostería fina, brunch y café de origen' },
+    { name: 'Restaurante Doña Petrona del Mar', specialty: 'Pescados, mariscos y cazuelas' },
+    { name: 'Restaurante Tony', specialty: 'Comida criolla y carnes santandereanas' },
+    { name: 'Guatapuri Rio Bar', specialty: 'Gastrobar, cócteles y comida fusión' },
+    { name: 'Restaurante Jungla', specialty: 'Platos a la parrilla y cocina local' },
+    { name: 'La Brasa Roja Bucaramanga', specialty: 'Pollo asado tradicional y platos típicos' }
+  ],
+  'medellin': [
+    { name: 'Restaurante El Cielo', specialty: 'Cocina sensorial y creativa colombiana' },
+    { name: 'Hacienda Junín', specialty: 'Bandeja paisa y gastronomía tradicional antioqueña' },
+    { name: 'Carmen Restaurante', specialty: 'Alta gastronomía contemporánea de autor' },
+    { name: 'Mondongo\'s El Poblado', specialty: 'Mondongo tradicional y sopas típicas antioqueñas' },
+    { name: 'Alambique', specialty: 'Cocina fusión caribe-antioqueña y cócteles artesanales' },
+    { name: 'Restaurante Hatoviejo', specialty: 'Parrilla y platos típicos colombianos' },
+    { name: 'La Pampa Parrilla Argentina', specialty: 'Cortes finos a la parrilla' },
+    { name: 'Restaurante Oci.Mde', specialty: 'Cocina lenta y platos para compartir' },
+    { name: 'Café Pergamino El Poblado', specialty: 'Café de especialidad y brunch' },
+    { name: 'Restaurante San Carbón', specialty: 'Carnes a las brasas y parrilla gourmet' }
+  ],
+  'bogota': [
+    { name: 'Restaurante Andrés DC', specialty: 'Carnes a la parrilla, rumba y cocina típica colombiana' },
+    { name: 'La Puerta Falsa', specialty: 'Ajiaco santafereño, tamales y chocolate con queso' },
+    { name: 'Restaurante Harry Sasson', specialty: 'Parrilla gourmet, robata y alta gastronomía' },
+    { name: 'Restaurante San Isidro Monserrate', specialty: 'Cocina francesa y pescados con vista panorámica' },
+    { name: 'La Candelaria Restaurante', specialty: 'Cocina tradicional bogotana y santafereña' },
+    { name: 'Pastelería Florida', specialty: 'Desayunos tradicionales, chocolate y repostería' },
+    { name: 'Restaurante Club Colombia', specialty: 'Platos típicos regionales de Colombia' },
+    { name: 'Wok Usaquén', specialty: 'Cocina asiática contemporánea' },
+    { name: 'Restaurante Matiz', specialty: 'Cocina de autor y europea moderna' },
+    { name: 'Leo Cocina y Cava', specialty: 'Alta cocina colombiana de ecosistemas' }
+  ],
+  'cali': [
+    { name: 'Restaurante Platillos Voladores', specialty: 'Cocina de autor fusión con raíces del Pacífico' },
+    { name: 'Restaurante Ringlete', specialty: 'Cocina vallecaucana tradicional gourmet' },
+    { name: 'Hacienda del Bosque', specialty: 'Cocina campestre internacional y cortes de carne' },
+    { name: 'El Faro Pizzería San Antonio', specialty: 'Pizzas artesanales en horno de leña' },
+    { name: 'La Tinaja Restaurante', specialty: 'Comida típica vallecaucana y asados' },
+    { name: 'Restaurante Carambolo', specialty: 'Cocina mediterránea y fusión en Granada' },
+    { name: 'Pica Restaurante de Autor', specialty: 'Cocina creativa vallecaucana y del Pacífico' },
+    { name: 'Restaurante Litany', specialty: 'Gastronomía libanesa y árabe tradicional' },
+    { name: 'Zumaia Restaurante', specialty: 'Pescados, mariscos y cocina fusión' },
+    { name: 'Restaurante Tortelli', specialty: 'Pastas frescas y gastronomía italiana' }
   ]
 })
 
@@ -3983,15 +4187,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           if (!stop?.name || uniqueStops.some(existing => arePlaceNamesSemanticallySame(existing.name, stop.name, destName))) continue
           uniqueStops.push(stop)
         }
-        const assignableStops = uniqueStops.slice(0, dayCount * 2)
+        // Multi-day tours require 3 stops per day (2 attractions + 1 restaurant)
+        const stopsPerDay = dayCount > 1 ? 3 : 5
+        const assignableStops = uniqueStops.slice(0, dayCount * stopsPerDay)
         const byDay = Array.from({ length: dayCount }, () => [])
         let nextStop = 0
-        // Place one confirmed stop on each available day before adding a second.
-        for (let day = 0; day < dayCount && nextStop < assignableStops.length; day++) {
-          byDay[day].push(assignableStops[nextStop++])
-        }
-        for (let day = 0; day < dayCount && nextStop < assignableStops.length; day++) {
-          byDay[day].push(assignableStops[nextStop++])
+        for (let round = 0; round < stopsPerDay && nextStop < assignableStops.length; round++) {
+          for (let day = 0; day < dayCount && nextStop < assignableStops.length; day++) {
+            byDay[day].push(assignableStops[nextStop++])
+          }
         }
         return byDay.flatMap((dayStops, index) => dayStops.map(stop => ({
           ...stop,
@@ -4032,9 +4236,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               numDays
             )
           : clusteredStops
-        const itineraryStops = isCoastalIslandsTour(known)
-          ? clusteredOrCoastalStops
-          : distributeStopsAcrossRequestedDays(clusteredOrCoastalStops, numDays)
+        const itineraryStops = clusteredOrCoastalStops
         known.specificPlaces = itineraryStops
         if (isCoastalIslandsTour(known)) {
           const byDay = new Map()
@@ -4402,8 +4604,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const rawPresetPlaces = (preset.places || []).map(p => typeof p === 'string' ? { name: p } : p).filter(p => getPlaceName(p))
           const catalogPlaces = ((preset.candidateCatalog?.places || []).map(p => typeof p === 'string' ? { name: p } : p)).filter(p => getPlaceName(p))
 
+          const cleanDestKey = destName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+          const cityIconicPlaces = (DESTINATION_ICONIC_LANDMARKS[cleanDestKey] || []).map(p => ({ name: p, category: 'attraction' }))
           const allAttractionCandidates = deduplicateChatSpecificPlaces(
-            [...rawSpecifics, ...rawPresetPlaces, ...catalogPlaces].filter(p => !isFoodStop(p)),
+            [...rawSpecifics, ...rawPresetPlaces, ...catalogPlaces, ...cityIconicPlaces].filter(p => !isFoodStop(p)),
             destName
           )
 
@@ -4691,17 +4895,17 @@ REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
      * Sector Neguanje / Palangana (Playas y Bahías): Playa Cristal, Bahía Concha, Neguanje, Cinto.
    - Prohibido mezclar en el mismo día atractivos de sectores opuestos que requieren diferentes accesos vehiculares.
 
-REGLA UNIVERSAL DE NO REDUNDANCIA Y EXCLUSIÓN MUTUA DE COMPLEJOS (CERO DUPLICIDAD EN CUALQUIER CIUDAD DEL MUNDO):
-- Si dos puntos de interés pertenecen al mismo complejo arquitectónico, parque o predio cultural (por ejemplo: un museo dentro de un parque cultural, un castillo y su bosque anexo, un palacio y sus jardines, o variantes con nombres similares):
-  * ESTRICTAMENTE PROHIBIDO incluir ambos en el mismo tour o asignarlos a días distintos.
-  * Selecciona exclusivamente UNO de ellos (el más emblemático o representativo) para todo el viaje.
-  * Nunca envíes al viajero dos veces al mismo predio/complejo en días diferentes. Utiliza siempre el espacio restante para un atractivo turístico completamente diferente y único de la ciudad.
+REGLA UNIVERSAL DE AGRUPAMIENTO Y NO DISPERSIÓN GEOGRÁFICA (CERO DISPERSIÓN EN CUALQUIER CIUDAD DEL MUNDO):
+- Si dos puntos de interés pertenecen al mismo complejo arquitectónico, parque o predio cultural, o están a muy corta distancia (<= 850 metros, ej. un museo dentro de un centro cultural, plazas y teatros contiguos):
+  * Deben agruparse OBLIGATORIAMENTE en el MISMO DÍA para que el recorrido sea cómodo y eficiente.
+  * ESTRICTAMENTE PROHIBIDO programar lugares vecinos o del mismo predio en días separados (por ejemplo: JAMÁS pongas un museo en el Día 1 y el centro cultural o parque vecino en el Día 3).
+  * No envíes nunca al viajero dos veces a la misma micro-zona en días diferentes.
 
 REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
-0. DISTRIBUCIÓN PARA VIAJES DE VARIOS DÍAS:
-   - Conserva todos los días solicitados y reparte primero una parada turística verificada distinta por día; después asigna una segunda donde haya inventario.
-   - Si el catálogo no alcanza para dos atractivos distintos por día, limita cada día a un máximo de dos paradas totales y no repitas ni inventes lugares o restaurantes para llenar espacio.
-   - Si tampoco hay una parada verificada para cada día, informa cuántos lugares únicos encontraste y pregunta si puede ampliarse la búsqueda a zonas cercanas.
+0. DISTRIBUCIÓN ESTRICTA PARA VIAJES DE VARIOS DÍAS:
+   - Para tours de varios días, cada día debe tener EXACTAMENTE 3 paradas: 2 atractivos turísticos/culturales distintos + 1 parada gastronómica / restaurante representativo.
+   - ESTRICTAMENTE PROHIBIDO generar días con solo 1 atractivo o sin restaurante.
+   - Agrupa siempre las paradas de cada día por proximidad geográfica estricta para minimizar tiempos de traslado.
 1. SELECCIÓN DE ATRACTIVOS ICÓNICOS Y REALES (NIVEL TURISMO INTERNACIONAL, CERO HARDCODEO):
    - Para CUALQUIER ciudad o destino del mundo solicitado (${destName || 'el destino seleccionado'}), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS que existan FÍSICAMENTE en ese destino específico.
    - AISLAMIENTO METROPOLITANO ESTRICTO (PROHIBIDO FUGAS INTER-CIUDAD):
@@ -5541,9 +5745,11 @@ REGLAS PARA "accommodationStatus":
       const explicitPlacesPerDay = Math.floor(cleanExplicitPool.length / Math.max(daysCount, 1))
       const maxCap = isExpressExpandedRecon ? 5 : 4
       const targetPerDay = Math.min(maxCap, Math.max(basePerDay, explicitPlacesPerDay))
-      const attractionsPerDay = uniqueAttractions.length >= (daysCount * targetPerDay)
-        ? targetPerDay
-        : Math.min(targetPerDay, Math.max(1, Math.floor(uniqueAttractions.length / Math.max(daysCount, 1))))
+      const attractionsPerDay = daysCount > 1
+        ? Math.max(2, targetPerDay)
+        : (uniqueAttractions.length >= (daysCount * targetPerDay)
+            ? targetPerDay
+            : Math.min(targetPerDay, Math.max(1, Math.floor(uniqueAttractions.length / Math.max(daysCount, 1)))))
 
       for (let d = 1; d <= daysCount; d++) {
         reconstructed += `Día ${d}: ${dName}\n`
