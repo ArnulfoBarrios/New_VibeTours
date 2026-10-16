@@ -667,6 +667,21 @@ export function selectBestPoiResult(results, originalQuery = '', options = {}) {
     }
   }
 
+  const isExplicitSecurityQuery = /\b(polic[ií]a|cai\b|comando\s+(?:de\s+)?polic[ií]a|comando\s+polic[ií]a|bomberos|c[aá]rcel|juzgado|fiscal[ií]a|inpec)\b/i.test(lowerQuery)
+  if (!isExplicitSecurityQuery) {
+    const nonSecurityCandidates = candidates.filter(r => {
+      if (isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isGenericFacilityName(r.name)) {
+        return false
+      }
+      return true
+    })
+    if (nonSecurityCandidates.length > 0) {
+      candidates = nonSecurityCandidates
+    } else {
+      return null
+    }
+  }
+
   if (candidates.length === 0) return null
 
   // Prioritize candidates matching targetCity and closest to (centerLat, centerLon)
@@ -1107,15 +1122,18 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'restaurante la fogata guatape': { name: 'Restaurante La Fogata Guatapé', latitude: 6.2336, longitude: -75.1570, city: 'Guatapé', country: 'Colombia', isRestaurant: true, category: 'restaurant', type: 'food' },
 
   // Coveñas & Tolú (Coastal Micro-Destinations)
+  'volcan de lodo': { name: 'Volcán de Lodo de San Antero', latitude: 9.3629242, longitude: -75.7795488, placeId: 'N/4757121230', city: 'San Antero', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'volcan de lodo san antero': { name: 'Volcán de Lodo de San Antero', latitude: 9.3629242, longitude: -75.7795488, placeId: 'N/4757121230', city: 'San Antero', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
   'playa primera ensenada': { name: 'Playa Primera Ensenada', latitude: 9.406388, longitude: -75.669701, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
   'primera ensenada': { name: 'Playa Primera Ensenada', latitude: 9.406388, longitude: -75.669701, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
   'playa segunda ensenada': { name: 'Playa Segunda Ensenada', latitude: 9.424386, longitude: -75.640120, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
   'segunda ensenada': { name: 'Playa Segunda Ensenada', latitude: 9.424386, longitude: -75.640120, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
-  'cienaga la caimanera': { name: 'Ciénaga La Caimanera', latitude: 9.409630, longitude: -75.628090, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
-  'cienaga de la caimanera': { name: 'Ciénaga La Caimanera', latitude: 9.409630, longitude: -75.628090, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'cienaga la caimanera': { name: 'Ciénaga La Caimanera', latitude: 9.4312, longitude: -75.6415, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
+  'cienaga de la caimanera': { name: 'Ciénaga La Caimanera', latitude: 9.4312, longitude: -75.6415, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
   'sector de acceso a la cienaga la caimanera': { name: 'Sector de acceso a la Ciénaga La Caimanera', latitude: 9.434738, longitude: -75.628461, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
   'parque especializado la caimanera': { name: 'Parque Especializado La Caimanera', latitude: 9.437261, longitude: -75.629786, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'nature' },
-  'punta de piedra': { name: 'Punta de Piedra', latitude: 9.420390, longitude: -75.651520, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'punta de piedra': { name: 'Punta de Piedra', latitude: 9.4670, longitude: -75.6170, city: 'Coveñas', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
+  'malecon de santiago de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5840, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
   'playa el frances': { name: 'Playa El Francés', latitude: 9.566067, longitude: -75.573737, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
   'playas del frances': { name: 'Playa El Francés', latitude: 9.566067, longitude: -75.573737, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
   'playa del malecon y zona de embarcaderos': { name: 'Playa del Malecón y zona de embarcaderos', latitude: 9.522041, longitude: -75.586262, city: 'Tolú', country: 'Colombia', coordinatesVerified: true, category: 'beach' },
@@ -1301,6 +1319,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   const lookupQuery = canonicalIdentity?.geocodeQuery || query
   const normalizedQuery = normalizeGeocodeQuery(lookupQuery)
   if (!normalizedQuery) return null
+  const isExplicitSecurityQuery = /\b(polic[ií]a|cai\b|comando\s+(?:de\s+)?polic[ií]a|comando\s+polic[ií]a|bomberos|c[aá]rcel|juzgado|fiscal[ií]a|inpec)\b/i.test(normalizedQuery)
 
   const key = `geocode_${canonicalIdentity?.id || normalizedQuery.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}`
   const cached = geocodeCache.get(key)
@@ -1410,6 +1429,9 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
         nearbyCities: options?.nearbyCities
       })
       if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
+        if (!isExplicitSecurityQuery && (isNonTouristFacility(photonProx) || isNonTouristFacility(photonProx.tags) || isNonTouristFacility({ name: photonProx.name }) || isGenericFacilityName(photonProx.name))) {
+          continue
+        }
         const dMeters = (centerLat != null && centerLon != null)
           ? haversineMeters(centerLat, centerLon, photonProx.latitude, photonProx.longitude)
           : 0
@@ -1457,6 +1479,9 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
           nearbyCities: options?.nearbyCities
         })
         if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
+          if (!isExplicitSecurityQuery && (isNonTouristFacility(photonGlobal) || isNonTouristFacility(photonGlobal.tags) || isNonTouristFacility({ name: photonGlobal.name }) || isGenericFacilityName(photonGlobal.name))) {
+            continue
+          }
           if (optCity && isPlaceInDifferentCity(photonGlobal, optCity, centerLat, centerLon, options?.nearbyCities)) {
             continue
           }
@@ -1535,6 +1560,14 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             if (isFuel && !isExplicitFuelQuery) return false
             const isUtility = ['waste_disposal', 'vending_machine', 'atm', 'car_wash', 'toilet', 'bench'].includes(type)
             if (isUtility) return false
+
+            if (!isExplicitSecurityQuery && (
+              isNonTouristFacility({ ...r, tags: { amenity: type || category, ...r.address } }) ||
+              isNonTouristFacility({ name: r.name || r.display_name || '' }) ||
+              isGenericFacilityName(r.name || r.display_name || '')
+            )) {
+              return false
+            }
 
             const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lookupQuery) &&
               !/\b(parque\s+del\s+caf[ée]|museo\s+del\s+caf[ée]|paisaje\s+cultural\s+cafetero|ruta\s+del\s+caf[ée])\b/i.test(lookupQuery)
@@ -2173,7 +2206,19 @@ export function isNonTouristFacility(rawTags = {}) {
   const tags = rawTags.tags || rawTags
   if (tags.office || tags.industrial || tags.shop || tags.craft) return true
   if (tags.tourism === 'travel_agency' || (tags.tourism === 'information' && tags.information === 'office')) return true
-  if (['ticket_validator', 'bureau_de_change', 'money_transfer', 'bank'].includes(tags.amenity)) return true
+  const osmAmenity = String(tags.amenity || tags.osm_value || '').toLowerCase()
+  if ([
+    'police', 'fire_station', 'post_office', 'courthouse', 'prison', 'jail',
+    'embassy', 'consulate', 'townhall', 'hospital', 'clinic', 'doctors', 'dentist',
+    'pharmacy', 'veterinary', 'school', 'university', 'college', 'kindergarten',
+    'childcare', 'fuel', 'car_wash', 'car_repair', 'parking', 'parking_space',
+    'parking_entrance', 'atm', 'bank', 'bureau_de_change', 'money_transfer',
+    'grave_yard', 'funeral_hall', 'ticket_validator', 'toilets', 'waste_disposal', 'recycling',
+    'shelter', 'telephone', 'charging_station', 'vending_machine'
+  ].includes(osmAmenity)) {
+    return true
+  }
+
   if (tags.man_made === 'pipeline' || tags.pipeline || tags.man_made === 'storage_tank' || tags.man_made === 'works') return true
 
   if (tags.place === 'neighbourhood' || tags.place === 'suburb' || tags.place === 'quarter' || tags.place === 'isolated_dwelling') return true
@@ -2190,7 +2235,7 @@ export function isNonTouristFacility(rawTags = {}) {
   if (['primary', 'secondary', 'tertiary', 'trunk', 'motorway', 'street', 'residential', 'service', 'track', 'living_street'].includes(tagType)) {
     return true
   }
-  if (['pitch', 'track', 'fitness_centre', 'university', 'college', 'school', 'kindergarten', 'hospital', 'clinic', 'bank', 'police'].includes(tagType)) {
+  if (['pitch', 'track', 'fitness_centre', 'university', 'college', 'school', 'kindergarten', 'hospital', 'clinic', 'bank', 'police', 'fire_station', 'courthouse', 'prison'].includes(tagType)) {
     return true
   }
   if (tags.leisure === 'pitch' || tags.leisure === 'fitness_centre') {
@@ -2208,6 +2253,14 @@ export function isNonTouristFacility(rawTags = {}) {
 
   const rawName = String(rawTags.name ?? tags.name ?? '').toLowerCase()
   const name = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  // Security, police, military, judicial, and municipal buildings
+  if (
+    /\b(polic[ií]a|cai\b|estaci[oó]n\s+de\s+polic[ií]a|comando\s+(?:de\s+)?polic[ií]a|comando\s+polic[ií]a|inspecci[oó]n\s+de\s+polic[ií]a|subestaci[oó]n\s+de\s+polic[ií]a|bomberos|estaci[oó]n\s+de\s+bomberos|cuerpo\s+de\s+bomberos|infanteria|base\s+de\s+entrenamiento|base\s+militar|base\s+naval|batallon|brigada\s+militar|cuartel|fuerzas\s+armadas|fiscal[ií]a|juzgado|tribunal|c[aá]rcel|penitenciar[ií]a|inpec\b|notar[ií]a|alcald[ií]a|gobernaci[oó]n|defensor[ií]a|personer[ií]a|registradur[ií]a|embajada|consulado|dian\b|seniat\b)\b/i.test(name) &&
+    !/\b(museo|castillo|fuerte|teatro)\b/i.test(name)
+  ) {
+    return true
+  }
 
   if (/\b(unidad\s+residencial|conjunto\s+residencial|complejo\s+residencial|residencial|residential\s+(?:unit|complex|building|community)|apartment\s+complex|condominio|urbanizacion)\b/i.test(name)) {
     return true
@@ -2231,12 +2284,6 @@ export function isNonTouristFacility(rawTags = {}) {
   if (tags.amenity === 'military' || tags.military) {
     const isHistoricAttraction = tags.tourism === 'attraction' || tags.historic === 'fort' || tags.historic === 'castle' || tags.historic === 'ruins'
     if (!isHistoricAttraction) return true
-  }
-  if (
-    /\b(infanteria|base\s+de\s+entrenamiento|base\s+militar|base\s+naval|batallon|brigada\s+militar|cuartel\s+militar|fuerzas\s+armadas)\b/i.test(name) &&
-    !/\b(museo|castillo|fuerte\s+historico)\b/i.test(name)
-  ) {
-    return true
   }
   if (rawName && (isGenericFacilityName(rawName) || isGenericFacilityName(name))) return true
   if (/\b(biosaludable|parque\s+infantil|polideportivo|cancha\s+multiple|urbanizaci[oó]n|\d+\s+con\s+circunvalar)\b/i.test(rawName)) return true

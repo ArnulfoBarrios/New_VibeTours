@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText, coastalWikipediaSummary } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, isPlaceInDifferentCity, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, isDistinctNameMatch, isPlaceInDifferentCity, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, fetchOpenAiChatCompletion, hasActiveLlm, getActiveLlmKey, cleanAndParseJson, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, sanitizeInternalTravelLanguage, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
@@ -545,7 +545,12 @@ export function isValidSpecificPlace(placeName) {
   }
 
   // 2.7 Descartar denominaciones genéricas aisladas sin nombre propio distintivo
-  if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+historico|centro)$/i.test(cleanLower)) {
+  if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+historico|centro)$/i.test(cleanLower) || isGenericFacilityName(cleanLower)) {
+    return false
+  }
+
+  // 2.75 Descartar instalaciones policiales, militares, judiciales, penitenciarias y administrativas
+  if (/\b(polic[ií]a|cai\b|comando\s+(?:de\s+)?polic[ií]a|comando\s+polic[ií]a|inspecci[oó]n\s+de\s+polic[ií]a|subestaci[oó]n\s+de\s+polic[ií]a|bomberos|batall[oó]n|cuartel|brigada\s+militar|base\s+militar|base\s+naval|fuerzas\s+armadas|fiscal[ií]a|juzgado|tribunal|c[aá]rcel|penitenciar[ií]a|inpec\b|alcald[ií]a|gobernaci[oó]n)\b/i.test(cleanLower) && !/\bmuseo\b/i.test(cleanLower)) {
     return false
   }
 
@@ -8141,7 +8146,14 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        if (directGeo && !hasOsmMapRecord(directGeo) && !isCuratedCoastalStop(directGeo)) {
+        if (directGeo && (
+          (!hasOsmMapRecord(directGeo) && !isCuratedCoastalStop(directGeo)) ||
+          isNonTouristFacility(directGeo) ||
+          isNonTouristFacility(directGeo.tags) ||
+          isNonTouristFacility({ name: directGeo.name }) ||
+          isGenericFacilityName(directGeo.name) ||
+          isGenericFacilityName(placeName)
+        )) {
           directGeo = null
         }
 

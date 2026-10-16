@@ -732,7 +732,7 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
 }
 
 export async function filterChatSpecificPlacesByOsm(places = [], city = '', country = '', selectedHotel = null, options = {}) {
-  const coastalIslands = isCoastalIslandsTour(options)
+  const coastalIslands = isCoastalIslandsTour(options) && Boolean(getCuratedCoastalDestinationKey(city || options?.destination || options?.city || ''))
   const geoScope = geographicScopeFor({ ...options, city, destination: city })
   const centerLat = Number(options.latitude ?? options.canonicalDestination?.latitude)
   const centerLon = Number(options.longitude ?? options.canonicalDestination?.longitude)
@@ -1121,7 +1121,7 @@ export function ensureCompleteOneDayItineraryText(text, destName = '', realCatal
   if (!text || typeof text !== 'string') return text
   const day1Match = text.match(/(D[íi]a\s+1\s*:\s*[^\n]*\n)([\s\S]*?)(?=\n\n(?:¿|D[íi]a\s+2|$))/i)
   if (!day1Match) return text
-  const coastalIslands = isCoastalIslandsTour(options)
+  const coastalIslands = isCoastalIslandsTour(options) && Boolean(getCuratedCoastalDestinationKey(destName || options?.destination || options?.city || ''))
   const verifiedCoastalPlaces = coastalIslands
     ? resolveCoastalCatalogEntries(realCatalog?.places, realCatalog?.candidateCatalog, 'places')
     : []
@@ -1338,6 +1338,8 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
   const isRecognizedTouristLandmark = (name) => {
     if (!name || typeof name !== 'string') return false
     const clean = name.trim().toLowerCase()
+    if (isGenericFacilityName(clean)) return false
+    if (/\b(polic[ií]a|cai\b|comando\s+(?:de\s+)?polic[ií]a|comando\s+polic[ií]a|bomberos|batall[oó]n|cuartel|fiscal[ií]a|juzgado|c[aá]rcel|penitenciar[ií]a|alcald[ií]a|gobernaci[oó]n)\b/i.test(clean) && !/\bmuseo\b/i.test(clean)) return false
     if (catalogAttractions.some(ca => arePlaceNamesSemanticallySame(ca, name, destName))) return true
     return /\b(museo|parque|mirador|monumento|catedral|iglesia|bas[íi]lica|santuario|bioparque|ecoparque|reserva|jard[íi]n|plaza|plazoleta|teatro|nevado|volc[aá]n|laguna|ci[ée]naga|termales|telef[ée]rico|cable\s+a[ée]reo|viaducto|puente|castillo|palacio|obelisco|malec[oó]n|zool[oó]gico|acuario|estadio|faro|muelle|playa|isla|bah[íi]a|arrecife|centro\s+cultural|biblioteca|ruinas?|murallas?|baluarte|fort[íi]n)\b/i.test(clean)
   }
@@ -1912,7 +1914,13 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
   ],
   'covenas': [
     { name: 'Restaurante El Pargo Rojo', specialty: 'Pescados y mariscos frente al mar' },
-    { name: 'Restaurante Don Rúa', specialty: 'Comida de mar y cazuela de mariscos' }
+    { name: 'Restaurante Don Rúa', specialty: 'Comida de mar y cazuela de mariscos' },
+    { name: 'Restaurante Donde Valerio', specialty: 'Comida de mar y mariscos en Tolú' }
+  ],
+  'coveñas': [
+    { name: 'Restaurante El Pargo Rojo', specialty: 'Pescados y mariscos frente al mar' },
+    { name: 'Restaurante Don Rúa', specialty: 'Comida de mar y cazuela de mariscos' },
+    { name: 'Restaurante Donde Valerio', specialty: 'Comida de mar y mariscos en Tolú' }
   ],
   'tolu': [
     { name: 'Restaurante El Galeón Tolú', specialty: 'Mariscos frescos y cocina costeña' },
@@ -4744,6 +4752,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         (/\b(?:por\s+qu[ée]\s+(?:nuevo\s+)?lugar\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(lastAssistantMsg) && !isExplicitBuildRequestedByUser) ||
         (/\b(?:cambiar|cambia|quitar|quita|eliminar)\s+/i.test(lastUserMsg) && (known.specificPlaces || []).some(s => arePlacesSimilar(typeof s === 'string' ? s : (s?.name || ''), lastUserMsg.replace(/^(?:cambiar|cambia|quitar|quita|eliminar)\s+(?:a\s+|el\s+|la\s+|al\s+)?/i, '').trim())))
       ) {
+        if ((!Array.isArray(known.specificPlaces) || known.specificPlaces.length === 0) && lastAssistantMsg) {
+          const fromAssistant = extractStopsFromItineraryText(lastAssistantMsg)
+          if (fromAssistant.length > 0) {
+            known.specificPlaces = fromAssistant
+          }
+        }
         const swapRequest = extractPlaceSwapRequest(lastUserMsg, known.specificPlaces, lastAssistantMsg)
         const currentSpecifics = (Array.isArray(known.specificPlaces) ? known.specificPlaces : []).map(p => typeof p === 'string' ? p : p.name)
         const cleanKey = (destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()

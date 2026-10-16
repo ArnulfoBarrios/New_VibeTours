@@ -131,11 +131,14 @@ export function isGenericFacilityName(rawName = '') {
   if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
   if (/^(?:plaza|parque|plazoleta|zona)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)$/i.test(clean)) return true
   if (/^descanso\s*\d+$/i.test(clean)) return true
-  // Filter out orphan administrative or generic heritage labels without a distinctive proper name (e.g. "Monumento Nacional")
-  if (/^(?:monumento|patrimonio|edificio|sitio|atractivo|bien)\s+(?:nacional|cultural|historico|histórico|turistico|turístico|distrital|municipal|de\s+la\s+nacion|de\s+la\s+nación)$/i.test(clean)) return true
-  if (/^(?:monumento\s+nacional|patrimonio\s+nacional|patrimonio\s+cultural)$/i.test(clean)) return true
+  // Filter out orphan administrative or generic heritage labels without a distinctive proper name (e.g. "Monumento Nacional", "Monumento Nacional por el")
+  if (/^(?:monumento|patrimonio|edificio|sitio|atractivo|bien)\s+(?:nacional|cultural|historico|histórico|turistico|turístico|distrital|municipal|de\s+la\s+nacion|de\s+la\s+nación)(?:\s+(?:por\s+el|por\s+la|de\s+la|del|de|seg[uú]n|en|al)\b.*)?$/i.test(clean)) return true
+  if (/\b(?:monumento\s+nacional|patrimonio\s+(?:nacional|cultural|de\s+la\s+humanidad)|bien\s+de\s+inter[eé]s\s+cultural|declarad[oa]\s+(?:monumento|patrimonio)|declaratoria\s+de\s+monumento)\b/i.test(clean) && !/\bmonumento\s+a(?:l|\s)/i.test(clean)) return true
+  if (/\b(?:por\s+el|por\s+la|para\s+el|para\s+la|con\s+el|con\s+la|seg[uú]n|de\s+la\s+naci[oó]n)\b/i.test(clean)) return true
+  if (/\s+(?:por|para|con|de|del|al|a|el|la|los|las)\s*$/i.test(clean)) return true
   if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+hist[oó]rico|centro)$/i.test(clean)) return true
   if (/^(?:turismo\s+(?:issn|social|[a-z0-9_-]+)|informaci[oó]n\s+tur[ií]stica|oficina\s+de\s+turismo)$/i.test(clean)) return true
+  if (/\b(polic[ií]a|cai\b|comando\s+(?:de\s+)?polic[ií]a|inspecci[oó]n\s+de\s+polic[ií]a|subestaci[oó]n\s+de\s+polic[ií]a|bomberos|batall[oó]n|cuartel|fiscal[ií]a|juzgado|c[aá]rcel|penitenciar[ií]a|inpec\b|alcald[ií]a|gobernaci[oó]n)\b/i.test(clean) && !/\bmuseo\b/i.test(clean)) return true
   return false
 }
 
@@ -280,6 +283,10 @@ function cleanExtractedLandmarkCandidate(raw = '', city = '') {
   }
 
   if (NEIGHBORHOOD_PARK_MARKERS.test(cleaned)) return ''
+  if (isGenericFacilityName(cleaned)) return ''
+  if (/\b(polic[ií]a|cai\b|comando\s+(?:de\s+)?polic[ií]a|inspecci[oó]n\s+de\s+polic[ií]a|subestaci[oó]n\s+de\s+polic[ií]a|bomberos|batall[oó]n|cuartel|fiscal[ií]a|juzgado|c[aá]rcel|penitenciar[ií]a|inpec\b|alcald[ií]a|gobernaci[oó]n)\b/i.test(cleaned) && !/\bmuseo\b/i.test(cleaned)) {
+    return ''
+  }
   return cleaned
 }
 
@@ -331,7 +338,7 @@ export function parseLandmarksFromWikitext(wikitext = '', city = '') {
     if (cleaned) candidates.push(capitalizeFirstLetter(cleaned))
   }
 
-  return candidates
+  return candidates.filter(c => c && !isGenericFacilityName(c))
 }
 
 async function fetchCityWikipediaWikitext(city = '', country = '', lang = 'es') {
@@ -667,6 +674,8 @@ export async function discoverDynamicCityLandmarks(city = '', country = '', lat 
   const rawList = []
   let idx = 0
   for (const name of combinedRaw) {
+    if (!name || isGenericFacilityName(name)) continue
+    if (/\b(polic[ií]a|cai\b|comando\s+(?:de\s+)?polic[ií]a|inspecci[oó]n\s+de\s+polic[ií]a|subestaci[oó]n\s+de\s+polic[ií]a|bomberos|batall[oó]n|cuartel|fiscal[ií]a|juzgado|c[aá]rcel|penitenciar[ií]a|inpec\b|alcald[ií]a|gobernaci[oó]n)\b/i.test(name) && !/\bmuseo\b/i.test(name)) continue
     if (isNeighborhoodOrMinorPark(name, {}, false)) continue
     const key = normalizeTextKey(name)
     if (!key) continue
