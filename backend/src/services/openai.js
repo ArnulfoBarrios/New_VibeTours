@@ -976,6 +976,9 @@ function itineraryBulletPlaceName(line) {
     candidate = candidate.split(/\s*:\s+/)[0].trim()
   }
   candidate = candidate.replace(/[.,;!]+$/, '').trim()
+  if (/\b(d[íi]a\s+libre|tarde\s+libre|ma[ñn]ana\s+libre|tiempo\s+libre|descanso|descansar|explorar\s+a\s+tu\s+ritmo|llegada|despedida|check[- ]in|check[- ]out|traslado|vuelo|retorno|regreso)\b/i.test(candidate)) {
+    return ''
+  }
   return candidate
 }
 
@@ -1289,9 +1292,13 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
   const addUnique = (list, name) => {
     if (name && !list.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))) list.push(name)
   }
+  const isNonPlaceStop = (name) => {
+    if (!name || typeof name !== 'string') return true
+    return /\b(d[íi]a\s+libre|tarde\s+libre|ma[ñn]ana\s+libre|tiempo\s+libre|descanso|descansar|explorar\s+a\s+tu\s+ritmo|llegada|despedida|check[- ]in|check[- ]out|traslado|vuelo|retorno|regreso)\b/i.test(name)
+  }
   for (const day of parsedDays) {
     for (const stop of day.rawStops) {
-      if (!isFoodStop(stop) && !isLowQualityOrFastFoodVenue(stop)) addUnique(allAttractions, stop)
+      if (!isNonPlaceStop(stop) && !isFoodStop(stop) && !isLowQualityOrFastFoodVenue(stop)) addUnique(allAttractions, stop)
     }
   }
   for (const name of catalogAttractions) addUnique(allAttractions, name)
@@ -1304,7 +1311,7 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
     let food = null
     let hadLowQuality = false
     for (const stop of source?.rawStops || []) {
-      if (isLowQualityOrFastFoodVenue(stop)) {
+      if (isNonPlaceStop(stop) || isLowQualityOrFastFoodVenue(stop)) {
         hadLowQuality = true
         continue
       }
@@ -1418,7 +1425,15 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
         day.finalAttrs.push(candidate)
         usedNames.push(candidate)
       } else {
-        break
+        const fallbackAttr = cityPresets.find(name =>
+          !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
+        )
+        if (fallbackAttr) {
+          day.finalAttrs.push(fallbackAttr)
+          usedNames.push(fallbackAttr)
+        } else {
+          break
+        }
       }
     }
   }
@@ -1441,6 +1456,11 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
       restaurant = catalogRestaurants.find(name =>
         !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
       ) || catalogRestaurants[0]
+    }
+    if (!restaurant && cityPresetRests.length > 0) {
+      restaurant = cityPresetRests.find(name =>
+        !day.finalAttrs.some(existing => arePlaceNamesSemanticallySame(existing, name, destName))
+      ) || cityPresetRests[0]
     }
     if (restaurant) {
       day.finalFood = restaurant
@@ -1736,7 +1756,16 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
     'Cerro de las Tres Cruces',
     'Parque Artesanal Loma de la Cruz',
     'Teatro Municipal Enrique Buenaventura',
-    'Museo del Oro Calima'
+    'Museo del Oro Calima',
+    'Museo de Arte Religioso',
+    'Museo Arqueológico La Merced',
+    'Museo Nacional del Transporte',
+    'Museo Arqueológico Julio César Cubillos',
+    'Museo Religioso y Colonial de San Francisco',
+    'Teatro Jorge Isaacs',
+    'Parque del Perro',
+    'Jardín Botánico de Cali',
+    'Gato del Río'
   ]
 })
 
@@ -1836,7 +1865,11 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
     { name: 'Pica Restaurante de Autor', specialty: 'Cocina creativa vallecaucana y del Pacífico' },
     { name: 'Restaurante Litany', specialty: 'Gastronomía libanesa y árabe tradicional' },
     { name: 'Zumaia Restaurante', specialty: 'Pescados, mariscos y cocina fusión' },
-    { name: 'Restaurante Tortelli', specialty: 'Pastas frescas y gastronomía italiana' }
+    { name: 'Restaurante Tortelli', specialty: 'Pastas frescas y gastronomía italiana' },
+    { name: 'Punto Verde, Comedor Vegetariano', specialty: 'Comida vegetariana y saludable' },
+    { name: 'Salud Radiante Restaurante Vegetariano', specialty: 'Cocina vegetariana y jugos naturales' },
+    { name: 'Restaurante Central', specialty: 'Comida típica colombiana y platos ejecutivos' },
+    { name: 'Restaurante Jardin China', specialty: 'Gastronomía oriental y comida china tradicional' }
   ]
 })
 
@@ -3409,6 +3442,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
   const itineraryAssistantMsg = itineraryAssistantMsgs[itineraryAssistantMsgs.length - 1] || null
   const hasItineraryAlreadyInHistory = Boolean(itineraryAssistantMsg)
+  let targetStops = []
   if (hasItineraryAlreadyInHistory) {
     const latestStops = extractStopsFromItineraryText(itineraryAssistantMsg?.content || itineraryAssistantMsg?.text || '')
     let bestHistoricalStops = []
@@ -3419,7 +3453,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     }
 
-    const targetStops = (latestStops.length >= bestHistoricalStops.length && latestStops.length >= 2)
+    targetStops = (latestStops.length >= bestHistoricalStops.length && latestStops.length >= 2)
       ? latestStops
       : (bestHistoricalStops.length > 0 ? bestHistoricalStops : latestStops)
 
@@ -3570,6 +3604,31 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const isKnownColombianCity = centroidCountry === 'Colombia' || /^(cartagena|santa marta|medellin|bogota|barranquilla|cali|covenas|tolu|san andres|bucaramanga|pereira|salento|guatape|villa de leyva|cucuta|manizales|armenia|pasto|villavicencio|ibague|neiva|popayan|monteria|valledupar|sincelejo|riohacha|tunja)$/i.test(knownCityNormalized)
   const destCountry = known.canonicalDestination?.country || known.country || centroidCountry || (isKnownColombianCity ? 'Colombia' : '')
 
+  const isDirectConfirmationOrBuild = /\b(confirmar(\s+y)?\s+(?:generar|crear|armar|construir)|gener(ar|es|a|e|en|al)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(?:el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(?:el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+
+  const isModifyingOrRequestingItineraryEarly = /\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares|m[aá]s\s+(paradas|lugares|sitios|atractivos)|agregar|a[ñn]adir|quitar|eliminar|reemplazar)\b/i.test(lastUserMsg)
+
+  if (hasItineraryAlreadyInHistory && targetStops.length >= 2 && isDirectConfirmationOrBuild && !isModifyingOrRequestingItineraryEarly) {
+    const confirmedPlaces = Array.isArray(known.specificPlaces) && known.specificPlaces.length >= targetStops.length
+      ? known.specificPlaces
+      : targetStops
+    const dName = destName || known.city || known.destination || 'tu destino'
+    const finalAccom = known.accommodationStatus || (known.selectedHotel ? 'Hotel elegido' : 'Casa propia / familiar')
+    return {
+      responseMessage: `¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes al máximo tu viaje a ${dName}.`,
+      actionChips: [`🚀 Generar tour en ${dName}`],
+      extractedPreferences: {
+        ...known,
+        accommodationStatus: finalAccom,
+        specificPlaces: confirmedPlaces,
+        readyToBuild: true
+      },
+      specificPlaces: confirmedPlaces,
+      destinationSuggestions: [],
+      readyToBuild: true
+    }
+  }
+
   if (isLocationToDestination) {
     known.tourType = 'location_to_destination'
     known.isUserLocationOrigin = true
@@ -3595,7 +3654,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         longitude: known.longitude,
         canonicalDestination: known.canonicalDestination
       }
-    ), 3500, [])
+    ), 3500, known.specificPlaces)
   }
   let hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
   const knownPlacesList = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
@@ -4160,24 +4219,64 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       if (isCoastalIslandsTour(known)) {
         preset = normalizeCoastalCatalog(preset, destName)
       }
+      const cleanKey = (destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      const cityIconics = DESTINATION_ICONIC_LANDMARKS[cleanKey] || DESTINATION_ICONIC_LANDMARKS[(destName || '').toLowerCase()] || []
+      const cityRests = (DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[(destName || '').toLowerCase()] || [])
+
       const normalizeFallbackCandidate = (place, entityType) => {
-        if (!place || typeof place !== 'object') return null
+        if (!place) return null
+        const name = typeof place === 'string' ? place : (place.name || place.nombre)
+        if (!name || typeof name !== 'string' || !name.trim()) return null
+        const isObj = typeof place === 'object' && place !== null
         return {
-          ...place,
-          entityType: place.entityType || place.category || entityType,
-          tags: { ...(place.metadata?.tags || {}), ...(place.tags || {}), ...(place.rawTags || {}) }
+          ...(isObj ? place : {}),
+          name: name.trim(),
+          entityType: (isObj && (place.entityType || place.category)) || entityType,
+          category: (isObj && (place.category || place.entityType)) || entityType,
+          fromWikipediaDiscovery: true,
+          tags: {
+            tourism: entityType === 'attraction' ? 'attraction' : undefined,
+            amenity: entityType === 'restaurant' ? 'restaurant' : undefined,
+            ...(isObj ? (place.metadata?.tags || place.tags || place.rawTags || {}) : {})
+          }
         }
       }
       const trustedFallbackAttractions = rankAndFilterTouristAttractions([
         ...(preset?.candidateCatalog?.places || []).map(place => normalizeFallbackCandidate(place, 'attraction')),
-        ...(preset?.places || []).map(place => normalizeFallbackCandidate(place, 'attraction'))
-      ].filter(Boolean), [])
+        ...(preset?.places || []).map(place => normalizeFallbackCandidate(place, 'attraction')),
+        ...cityIconics.map(place => normalizeFallbackCandidate(place, 'attraction'))
+      ].filter(Boolean), cityIconics)
         .filter(place => isQualifiedChatItineraryPlace(place))
+
+      for (const iconName of cityIconics) {
+        const normIcon = typeof iconName === 'string' ? iconName : iconName?.name
+        if (!normIcon) continue
+        if (!trustedFallbackAttractions.some(a => arePlaceNamesSemanticallySame(a.name, normIcon, destName))) {
+          const cand = normalizeFallbackCandidate(iconName, 'attraction')
+          if (cand && !isGenericFacilityName(cand.name)) {
+            trustedFallbackAttractions.push(cand)
+          }
+        }
+      }
+
       const trustedFallbackRestaurants = rankAndFilterTouristRestaurants([
         ...(preset?.candidateCatalog?.restaurants || []).map(place => normalizeFallbackCandidate(place, 'restaurant')),
-        ...(preset?.restaurants || []).map(place => normalizeFallbackCandidate(place, 'restaurant'))
+        ...(preset?.restaurants || []).map(place => normalizeFallbackCandidate(place, 'restaurant')),
+        ...cityRests.map(place => normalizeFallbackCandidate(place, 'restaurant'))
       ].filter(Boolean))
         .filter(place => isQualifiedChatItineraryPlace(place))
+
+      for (const restItem of cityRests) {
+        const rName = typeof restItem === 'string' ? restItem : restItem?.name
+        if (!rName) continue
+        if (!trustedFallbackRestaurants.some(r => arePlaceNamesSemanticallySame(r.name, rName, destName))) {
+          const cand = normalizeFallbackCandidate(restItem, 'restaurant')
+          if (cand && !isLowQualityOrFastFoodVenue(cand.name, cand.tags)) {
+            trustedFallbackRestaurants.push(cand)
+          }
+        }
+      }
+
       trustedFallbackPlaces = [...trustedFallbackAttractions, ...trustedFallbackRestaurants]
 
       const distributeStopsAcrossRequestedDays = (stops = [], numDays = 1) => {
@@ -4249,12 +4348,22 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             .sort(([left], [right]) => left - right)
             .map(([day, names]) => `Día ${day}: ${destName}\n${names.map(name => ` • ${name}`).join('\n')}`)
         }
-        return Array.from({ length: Math.max(1, Number(numDays) || 1) }, (_, index) => {
+        const blocks = Array.from({ length: Math.max(1, Number(numDays) || 1) }, (_, index) => {
           const dayStops = itineraryStops.filter(stop => Number(stop.dia || stop.day) === index + 1)
           return `Día ${index + 1}: ${destName}${dayStops.length > 0
             ? `\n${dayStops.map(stop => ` • ${stop.name}`).join('\n')}`
-            : '\nDía libre para descansar o explorar a tu ritmo.'}`
+            : ''}`
         })
+        let rawItin = blocks.join('\n\n')
+        if (numDays > 1) {
+          rawItin = ensureBalancedMultiDayItineraryText(rawItin, destName, preset, { specificPlaces: itineraryStops }, { numDays })
+          const finalStops = extractStopsFromItineraryText(rawItin)
+          if (finalStops.length >= itineraryStops.length) {
+            known.specificPlaces = finalStops
+          }
+          return rawItin.split(/\n\n(?=D[íi]a\s*\d+)/i)
+        }
+        return blocks
       }
 
       // buildLocationCorridorDayBlocks is hoisted to generateChatResponse scope above
@@ -4356,9 +4465,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
             ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
             : []
-          const rawPresetRests = trustedFallbackRestaurants.map(r => r.name).filter(Boolean)
+          const rawPresetRests = trustedFallbackRestaurants.map(r => r.name || r).filter(Boolean)
           const pool = deduplicateChatSpecificPlaces(
-            [...rawSpecifics, ...trustedFallbackAttractions.map(p => p.name)],
+            [...rawSpecifics, ...trustedFallbackAttractions.map(p => p.name || p), ...cityIconics],
             destName
           ).map(p => typeof p === 'string' ? p : p.name)
            .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
@@ -4409,9 +4518,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             }
           }
 
-          dayBlocks = buildCoherentChatDayBlocks(numDays, pool); fallbackMsg = `Itinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
-            (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
-            `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está listo para generar el tour?`
+          dayBlocks = buildCoherentChatDayBlocks(numDays, pool)
+          let rawItin = `Itinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
+            (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.')
+          if (numDays > 1) {
+            rawItin = ensureBalancedMultiDayItineraryText(rawItin, destName, preset, { specificPlaces: known.specificPlaces }, { numDays })
+          }
+          fallbackMsg = `${rawItin}\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está listo para generar el tour?`
         } else {
           fallbackMsg = `¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName}?`
         }
@@ -4718,9 +4831,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
             ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
             : []
-          const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
+          const rawPresetRests = trustedFallbackRestaurants.map(r => r.name || r).filter(Boolean)
           const pool = deduplicateChatSpecificPlaces(
-            [...rawSpecifics, ...(preset.places || []), ...((preset.candidateCatalog?.places || []).map(p => p?.name || p).filter(Boolean))],
+            [
+              ...rawSpecifics,
+              ...trustedFallbackAttractions.map(p => p.name || p),
+              ...(preset.places || []),
+              ...((preset.candidateCatalog?.places || []).map(p => p?.name || p).filter(Boolean)),
+              ...cityIconics
+            ],
             destName
           ).map(p => typeof p === 'string' ? p : p.name)
            .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
@@ -4769,8 +4888,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             effectiveReadyToBuild = true
           } else {
             dayBlocks = buildCoherentChatDayBlocks(numDays, pool)
-            fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\nItinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
-              (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
+            let rawItin = `Itinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
+              (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.')
+            if (numDays > 1) {
+              rawItin = ensureBalancedMultiDayItineraryText(rawItin, destName, preset, { specificPlaces: known.specificPlaces }, { numDays })
+            }
+            fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\n${rawItin}` +
               `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
           }
         }
@@ -5253,7 +5376,7 @@ REGLAS PARA "accommodationStatus":
           longitude: known.longitude,
           canonicalDestination: known.canonicalDestination
         }
-      ), 3500, [])
+      ), 3500, parsedExtracted.specificPlaces)
     }
 
     // Filtrar estrictamente cualquier hotel o rótulo genérico que se haya colado en specificPlaces
@@ -5328,7 +5451,7 @@ REGLAS PARA "accommodationStatus":
       .trim()
 
     // Detección explícita de comando de generación enviado por el usuario
-    const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+    const isUserExplicitlyOrderingBuild = /\b(confirmar(\s+y)?\s+(?:generar|crear|armar|construir)|gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
 
     // Detección de petición de agregar paradas
     const isGenericMoreStopsRequest = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales|agrega\s+m[aá]s|a[ñn]ade\s+m[aá]s|incluye\s+m[aá]s|agregar\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades)|a[ñn]adir\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades))\b/i.test(lastUserMsg)
@@ -6079,7 +6202,7 @@ REGLAS PARA "accommodationStatus":
 
     // Enforce cross-day global uniqueness on specificPlaces: no POI can appear on multiple days
     const rawSpecifics = Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0
-      ? parsedExtracted.specificPlaces
+      ? (Array.isArray(known.specificPlaces) && known.specificPlaces.length > parsedExtracted.specificPlaces.length ? known.specificPlaces : parsedExtracted.specificPlaces)
       : (known.specificPlaces || [])
     const dedupedSpecificPlaces = deduplicateChatSpecificPlaces(
       rawSpecifics,

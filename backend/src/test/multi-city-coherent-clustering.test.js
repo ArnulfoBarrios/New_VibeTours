@@ -6,6 +6,7 @@ import {
   inferPlaceMicroSector
 } from '../services/open-tourism-service.js'
 import {
+  generateChatResponse,
   ensureBalancedMultiDayItineraryText,
   DESTINATION_ICONIC_LANDMARKS,
   DESTINATION_ICONIC_RESTAURANTS
@@ -344,6 +345,73 @@ Día 3: Bucaramanga
 
       // 5 iterations must complete in < 30 ms
       assert.ok(batchDurationMs < 30, `5 clusterings took ${batchDurationMs.toFixed(2)} ms, which must be < 30 ms`)
+    })
+  })
+
+  describe('7. Confirmation Integrity & Fast Path Fidelity (Cali 7-day tour)', () => {
+    it('preserves exactly 21 stops without degradation upon user confirmation in under 250ms', async () => {
+      const cali7DayItinerary = `Itinerario de Viaje: Cali (7 días)
+
+Día 1: Cali
+• Museo del Oro Calima
+• Museo de Arte Religioso
+• Punto Verde, Comedor Vegetariano
+
+Día 2: Cali
+• Museo La Tertulia
+• Ágora del museo
+• Restaurante Tortelli
+
+Día 3: Cali
+• Bulevar del Río Cali
+• Teatro Jorge Isaacs
+• Restaurante central
+
+Día 4: Cali
+• Teatro Municipal Enrique Buenaventura
+• Museo Arqueológico Julio César Cubillos
+• Restaurante Jardin China
+
+Día 5: Cali
+• Monumento a Sebastián de Belalcázar
+• Gato del Río
+• El Faro Pizzería San Antonio
+
+Día 6: Cali
+• Catedral Metropolitana de San Pedro Apóstol
+• Museo Nacional del Transporte
+• Salud Radiante Restaurante Vegetariano
+
+Día 7: Cali
+• Museo Religioso y Colonial de San Francisco
+• Museo Arqueológico La Merced
+• Zumaia Restaurante
+
+¿Deseas confirmar este itinerario y generar tu tour en el mapa?`
+
+      const state = {
+        message: '🚀 Confirmar y generar tour',
+        history: [
+          { role: 'user', content: 'Quiero un tour de 7 días en Cali' },
+          { role: 'assistant', content: cali7DayItinerary }
+        ]
+      }
+
+      const currentPreferences = {
+        city: 'Cali',
+        country: 'Colombia',
+        durationDays: 7,
+        datesSeason: '7 días',
+        companions: 'En pareja'
+      }
+
+      const t0 = performance.now()
+      const result = await generateChatResponse(state, '', '', currentPreferences)
+      const durationMs = performance.now() - t0
+
+      assert.equal(result.readyToBuild, true, 'Tour must be ready to build immediately')
+      assert.equal(result.specificPlaces.length, 21, 'Must preserve all 21 approved stops')
+      assert.ok(durationMs < 250, `Confirmation must be fast, took ${durationMs.toFixed(1)}ms`)
     })
   })
 })
