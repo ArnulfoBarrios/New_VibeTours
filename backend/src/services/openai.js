@@ -813,8 +813,12 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
 }
 
 export function buildHotelRecommendationReply(destination, hotels = []) {
+  const normDest = String(destination || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const presetHotels = (typeof DESTINATION_ICONIC_HOTELS !== 'undefined' ? (DESTINATION_ICONIC_HOTELS[normDest] || DESTINATION_ICONIC_HOTELS[(destination || '').toLowerCase()] || []) : [])
+  const combined = [...(Array.isArray(hotels) ? hotels : []), ...presetHotels]
+
   const names = []
-  for (const hotel of Array.isArray(hotels) ? hotels : []) {
+  for (const hotel of combined) {
     const name = String(typeof hotel === 'string' ? hotel : hotel?.name || '').trim()
     if (!name || isTriviallyGenericHotelName(name, destination) || isGenericFacilityName(name)) continue
     if (!names.some(existing => arePlacesSimilar(existing, name))) names.push(name)

@@ -1953,6 +1953,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
+    const isOneDayTour = Number(updatedPreferences.durationDays) === 1 || Number(updatedPreferences.durationHours) <= 12 || (aiResponse.extractedPreferences && Number(aiResponse.extractedPreferences.durationDays) === 1)
     const hasHistoryItinerary = (history || []).some(m => {
       const text = m?.content || m?.text || ''
       return /(?:^|\n)\s*(?:#{1,4}\s*)?D[íi]a\s*1\b/i.test(text) || /\bitinerario\s+de\s+viaje\b/i.test(text)
