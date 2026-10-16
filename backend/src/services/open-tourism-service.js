@@ -84,7 +84,7 @@ export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted
 export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   const cleanName = String(name || '').trim()
   if (!cleanName) return true
-  if (/\b(comidas?\s+r[aá]pidas?|comodas?\s+rapidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|pollo\s+frito|sir\s+pollo|mis\s+carnes|qbano|s[aá]ndwich\s+qbano|tostao'?|cosechas|sr\.?\s*wok|chop\s*suey|submarina|autoservicio|auto\s+servicio|arepas?\s+rellenas?|empanadas?|jugos\s+la\s+jarra|^jugos\b|fruter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|billares|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|cafeter[ií]a\s+y\s+restaurante|restaurante\s+y\s+cafeter[ií]a|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
+  if (/\b(comidas?\s+r[aá]pidas?|comodas?\s+rapidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|pollo\s+frito|sir\s+pollo|mis\s+carnes|qbano|s[aá]ndwich\s+qbano|tostao'?|cosechas|sr\.?\s*wok|chop\s*suey|submarina|autoservicio|auto\s+servicio|arepas?\s+rellenas?|empanadas?|jugos\s+la\s+jarra|^jugos\b|fruter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|billares|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|cafeter[ií]a\s+y\s+restaurante|restaurante\s+y\s+cafeter[ií]a|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?|starbucks|dunkin'?|tostao'?|juan\s+valdez)\b/i.test(cleanName)) {
     return true
   }
   // Reject religious shrines, monuments, statues, and recreational clubs ONLY when evaluating restaurants
@@ -121,6 +121,7 @@ export function isGenericFacilityName(rawName = '') {
   const genericList = [
     'restaurante', 'restaurant', 'bar', 'café', 'cafe', 'cafetería', 'cafeteria',
     'cafetería y restaurante', 'cafeteria y restaurante', 'restaurante y cafetería', 'restaurante y cafeteria',
+    'restaurante bar', 'bar restaurante', 'restaurante chino',
     'comidas rápidas', 'comidas rapidas', 'fast food', 'hotel', 'hostal', 'hostel',
     'posada', 'alojamiento', 'atractivo', 'monumento', 'parque', 'plaza', 'mirador',
     'tienda', 'panadería', 'panaderia', 'kiosko', 'kiosco', 'puesto', 'estadero',
@@ -134,6 +135,7 @@ export function isGenericFacilityName(rawName = '') {
   if (/^(?:monumento|patrimonio|edificio|sitio|atractivo|bien)\s+(?:nacional|cultural|historico|histórico|turistico|turístico|distrital|municipal|de\s+la\s+nacion|de\s+la\s+nación)$/i.test(clean)) return true
   if (/^(?:monumento\s+nacional|patrimonio\s+nacional|patrimonio\s+cultural)$/i.test(clean)) return true
   if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+hist[oó]rico|centro)$/i.test(clean)) return true
+  if (/^(?:turismo\s+(?:issn|social|[a-z0-9_-]+)|informaci[oó]n\s+tur[ií]stica|oficina\s+de\s+turismo)$/i.test(clean)) return true
   return false
 }
 

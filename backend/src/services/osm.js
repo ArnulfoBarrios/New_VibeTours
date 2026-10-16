@@ -16,8 +16,8 @@ const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 // An LLM can suggest a real venue while still inventing an inaccurate point.
 // Only coordinates returned by a map provider (or our small curated seed set)
 // may be used as navigation coordinates.
-const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'tomtom', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-discovery'])
-const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'tomtom', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-discovery'])
+const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'tomtom', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'openai_iconic', 'ai_iconic', 'dynamic_catalog', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-discovery'])
+const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'tomtom', 'mapbox', 'geoapify', 'ai_address', 'openai_iconic', 'ai_iconic', 'dynamic_catalog', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-discovery'])
 
 // Algunas atracciones tienen más de un nombre comercial o institucional, pero
 // representan el mismo punto de visita. Esto es una identidad semántica, no
@@ -97,7 +97,7 @@ export function hasVerifiedCoordinates(place) {
   if (place.coordinatesVerified === true || place.coordinates_verified === true || place.coordenadas_verificadas === true) return true
 
   const source = String(place.coordinateSource ?? place.coordinate_source ?? place.fuente_coordenadas ?? '').trim().toLowerCase()
-  if (VERIFIED_COORDINATE_SOURCES.has(source) || source.startsWith('cache') || source.startsWith('mapbox') || source.startsWith('geoapify') || source.startsWith('ai_address')) return true
+  if (VERIFIED_COORDINATE_SOURCES.has(source) || source.startsWith('cache') || source.startsWith('mapbox') || source.startsWith('geoapify') || source.startsWith('ai_address') || source.startsWith('openai_iconic') || source.startsWith('ai_iconic')) return true
 
   const tags = place.tags && typeof place.tags === 'object' ? place.tags : {}
   const grounded = tags.grounded_geocoded === true || tags.grounded_geocoded === 'true'
@@ -116,7 +116,7 @@ export function hasOsmMapRecord(place) {
   const source = String(place.coordinateSource ?? place.coordinate_source ?? place.fuente_coordenadas ?? '')
     .trim()
     .toLowerCase()
-  return OSM_MAP_SOURCES.has(source) || source.startsWith('cache') || source.startsWith('mapbox') || source.startsWith('geoapify') || source.startsWith('ai_address')
+  return OSM_MAP_SOURCES.has(source) || source.startsWith('cache') || source.startsWith('mapbox') || source.startsWith('geoapify') || source.startsWith('ai_address') || source.startsWith('openai_iconic') || source.startsWith('ai_iconic')
 }
 
 function withVerifiedCoordinates(place, coordinateSource, placeId = '') {
@@ -1724,7 +1724,7 @@ export function isPhotonCircuitOpen() {
   return Date.now() < photonCircuitOpenUntil
 }
 
-export function tripPhotonCircuit(durationMs = (process.env.NODE_ENV === 'test' ? 2000 : 10000)) {
+export function tripPhotonCircuit(durationMs = 60000) {
   photonCircuitOpenUntil = Date.now() + durationMs
   console.warn(`[osm] Photon circuit breaker tripped for ${durationMs / 1000}s`)
 }
@@ -1748,14 +1748,14 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
   try {
     const requestedTimeoutMs = Number(options?.timeoutMs)
     const timeoutMs = Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
-      ? Math.min(requestedTimeoutMs, 4500)
-      : (process.env.NODE_ENV === 'test' ? 4000 : 4500)
+      ? Math.min(requestedTimeoutMs, 2000)
+      : 2000
     const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) {
       if (response.status === 429 || response.status >= 500) {
         photonConsecutiveErrors++
-        if (photonConsecutiveErrors >= 3) {
-          tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
+        if (photonConsecutiveErrors >= 2) {
+          tripPhotonCircuit(60000)
         }
       }
       return []
@@ -1815,8 +1815,8 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
       photonConsecutiveErrors++
-      if (photonConsecutiveErrors >= 3) {
-        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 1500 : 5000)
+      if (photonConsecutiveErrors >= 2) {
+        tripPhotonCircuit(60000)
       }
     }
     return []
@@ -2253,7 +2253,8 @@ export function isNonTouristFacility(rawTags = {}) {
     if (!isPhysicalVenue) return true
   }
   if (
-    /\b(agencia\s+de\s+viajes?|viajes\s+y\s+turismo|turismo\s+internacional|tour\s+operator|travel\s+agency|travel\s+and\s+tours?|operador\s+tur[ií]stico|operadores\s+tur[ií]sticos|mayorista\s+de\s+turismo|venta\s+de\s+tiquetes|ticket\s+office|asesores?\s+de\s+viajes?)\b/i.test(name) ||
+    /\b(agencia\s+de\s+viajes?|viajes\s+y\s+turismo|turismo\s+internacional|tour\s+operator|travel\s+agency|travel\s+and\s+tours?|operador\s+tur[ií]stico|operadores\s+tur[ií]sticos|mayorista\s+de\s+turismo|venta\s+de\s+tiquetes|ticket\s+office|asesores?\s+de\s+viajes?|oficina\s+de\s+turismo|secretar[ií]a\s+de\s+turismo|direcci[oó]n\s+de\s+turismo|delegaci[oó]n\s+de\s+turismo|informaci[oó]n\s+tur[ií]stica|informes?\s+tur[ií]sticos?|turismo\s+(?:social|issn|[a-z0-9_-]+))\b/i.test(name) ||
+    /\b(lavadero|car\s*wash|lavado\s+de\s+autos|lavander[ií]a|tintorer[ií]a)\b/i.test(name) ||
     /\b(oleoducto|gasoducto|poliducto|refineria|tuberia|estacion de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
     /\b(supermercado|tienda|drogueria|farmacia|ferreteria|almacen|panaderia|carniceria|minimarket|estanco|miscelanea|bodega|deposito)\b/i.test(name) ||
     /\b(alkosto|exito|carulla|olimpica|jumbo|makro|pricesmart|tiendas d1|d1|tiendas ara|ara|homecenter|falabella|sodimac|panamericana)\b/i.test(name) ||
@@ -2275,8 +2276,9 @@ export function isNonTouristFacility(rawTags = {}) {
     name.includes('transito') ||
     name.includes('subestacion') ||
     name.includes('gas natural') ||
-    name.includes('cementerio') ||
-    name.includes('camposanto') ||
+    ((name.includes('cementerio') || name.includes('camposanto')) &&
+      !/\b(recoleta|p[eè]re\s+lachaise|san\s+pedro|highgate|arlington|presb[ií]tero\s+mat[ií]as\s+maestro|staglieno|chauchilla|santa\s+ifigenia|montparnasse|colon|col[oó]n|tulc[aá]n)\b/i.test(name) &&
+      tags.tourism !== 'attraction' && tags.historic !== 'yes' && tags.historic !== 'tomb' && tags.historic !== 'monument') ||
     name.includes('jardines de paz') ||
     name.includes('funeraria') ||
     name.includes('canal santa marta') ||

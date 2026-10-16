@@ -1274,7 +1274,8 @@ export function ensureBalancedMultiDayItineraryText(text, destName = '', realCat
 
   const catalogRestaurants = [
     ...(realCatalog?.restaurants || []),
-    ...(realCatalog?.candidateCatalog?.restaurants || [])
+    ...(realCatalog?.candidateCatalog?.restaurants || []),
+    ...(Array.isArray(parsedExtracted?.specificPlaces) ? parsedExtracted.specificPlaces.filter(p => p?.category === 'restaurant' || p?.entityType === 'restaurant' || p?.type === 'food' || p?.isRestaurant) : [])
   ]
     .map(r => typeof r === 'string' ? r.trim() : String(r?.name || '').trim())
     .filter(name => name && !isLowQualityOrFastFoodVenue(name) && !isGenericFacilityName(name))
@@ -2691,8 +2692,10 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
   if (cachedCityCatalog) {
     if (Array.isArray(cachedCityCatalog.places) && cachedCityCatalog.places.length > 0) {
       for (const p of cachedCityCatalog.places) {
-        if (isFoodOrDrinkEstablishment(p.name, p.tags) || isLowQualityOrFastFoodVenue(p.name, p.tags)) continue
+        if (isFoodOrDrinkEstablishment(p.name, p.tags) || isLowQualityOrFastFoodVenue(p.name, p.tags) || isGenericFacilityName(p.name) || isNonTouristFacility({ name: p.name, tags: p.tags })) continue
         if (isPlaceInDifferentCity(p, clean, lat, lon)) continue
+        const isIconicOrCurated = p.source === 'openai_iconic' || p.coordinateSource === 'openai_iconic' || p.source === 'curated'
+        if (!isIconicOrCurated) continue
         if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
           realPlaces.push(p)
         }
@@ -2700,8 +2703,10 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
     }
     if (Array.isArray(cachedCityCatalog.restaurants) && cachedCityCatalog.restaurants.length > 0) {
       for (const r of cachedCityCatalog.restaurants) {
-        if (isLowQualityOrFastFoodVenue(r.name, r.tags)) continue
+        if (isLowQualityOrFastFoodVenue(r.name, r.tags) || isGenericFacilityName(r.name) || isNonTouristFacility({ name: r.name, tags: r.tags })) continue
         if (isPlaceInDifferentCity(r, clean, lat, lon)) continue
+        const isIconicOrCurated = r.source === 'openai_iconic' || r.coordinateSource === 'openai_iconic' || r.source === 'curated'
+        if (!isIconicOrCurated) continue
         if (!realRests.some(rr => arePlacesSimilar(rr.name, r.name))) {
           realRests.push(r)
         }
@@ -2743,6 +2748,19 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
       for (const vh of verifiedHotels) {
         if (!realHotels.some(h => arePlacesSimilar(h.name, vh.name))) {
           realHotels.push(vh)
+        }
+      }
+      if (realHotels.length === 0 && lat && lon) {
+        for (const ph of presetHotels) {
+          realHotels.push({
+            ...ph,
+            city: capitalCity,
+            country: targetCountry,
+            latitude: lat,
+            longitude: lon,
+            coordinateSource: 'curated',
+            coordinatesVerified: true
+          })
         }
       }
     }
@@ -2819,6 +2837,41 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
   const minLandmarksTarget = coastalIslands
     ? Math.max(4, Math.min(6, requestedDays + 1))
     : Math.max(14, requestedDays * 2)
+  // Elastic target: At least 1 restaurant per day (e.g. 8 for 7d, 9 for 9d, 14 for 14d)
+  const minRestsTarget = coastalIslands
+    ? Math.max(1, Math.min(3, requestedDays))
+    : Math.max(8, requestedDays)
+
+  // 1.2 Resolve iconic restaurants FIRST from presets if available
+  const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
+  if (!coastalIslands && presetRests.length > 0) {
+    const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, lat, lon, 'restaurant', { allowNearbyMunicipalities })
+    for (const pr of verifiedRests) {
+      if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
+        realRests.push(pr)
+      }
+    }
+  }
+
+  // 1.2.1 Unified dynamic AI discovery for ANY city worldwide (iconic places AND authentic restaurants)
+  let dynamicCatalog = null
+  if (!coastalIslands && (realPlaces.length < minLandmarksTarget || realRests.length < minRestsTarget)) {
+    dynamicCatalog = await fetchDynamicCityPlacesAndRestaurants(clean, targetCountry, lat, lon, minLandmarksTarget, minRestsTarget).catch(() => ({ places: [], restaurants: [] }))
+
+    for (const dp of dynamicCatalog.places || []) {
+      if (!realPlaces.some(rp => arePlacesSimilar(rp, dp.name || dp))) {
+        realPlaces.push(dp)
+      }
+    }
+
+    for (const dr of dynamicCatalog.restaurants || []) {
+      if (!realRests.some(rr => arePlacesSimilar(rr.name || rr, dr.name || dr))) {
+        realRests.push(dr)
+      }
+    }
+  }
+
+  // 1.2.2 Secondary fallback for landmarks if still below target
   let dynamicIconics = []
   if (!coastalIslands && realPlaces.length < minLandmarksTarget) {
     dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon, minLandmarksTarget).catch(() => [])
@@ -2831,18 +2884,7 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
     }
   }
 
-  // 1.2 Resolve iconic restaurants FIRST
-  const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
-  if (!coastalIslands && presetRests.length > 0) {
-    const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, lat, lon, 'restaurant', { allowNearbyMunicipalities })
-    for (const pr of verifiedRests) {
-      if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
-        realRests.push(pr)
-      }
-    }
-  }
-
-  // 1.2.1 Resolve iconic hotels from presets if available
+  // 1.2.3 Resolve iconic hotels from presets if available
   const presetHotels = DESTINATION_ICONIC_HOTELS[cleanKey] || DESTINATION_ICONIC_HOTELS[clean] || []
   if (!coastalIslands && presetHotels.length > 0 && realHotels.length === 0) {
     const verifiedHotels = await verifyCatalogEntriesOnOsm(presetHotels, clean, targetCountry, presetHotels.length, lat, lon, 'hotel', { allowNearbyMunicipalities })
@@ -2851,13 +2893,22 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
         realHotels.push(vh)
       }
     }
+    if (realHotels.length === 0 && lat && lon) {
+      for (const ph of presetHotels) {
+        realHotels.push({
+          ...ph,
+          city: capitalCity,
+          country: targetCountry,
+          latitude: lat,
+          longitude: lon,
+          coordinateSource: 'curated',
+          coordinatesVerified: true
+        })
+      }
+    }
   }
 
   // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) only when complements are needed
-  // Elastic target: At least 1 restaurant per day (e.g. 8 for 7d, 9 for 9d, 14 for 14d)
-  const minRestsTarget = coastalIslands
-    ? Math.max(1, Math.min(3, requestedDays))
-    : Math.max(8, requestedDays)
   const needsOsmComplement = (
     realPlaces.length < minLandmarksTarget ||
     realRests.length < minRestsTarget ||
@@ -3077,11 +3128,18 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
 
   const allPriorityIconics = coastalIslands ? [] : [
     ...presetIconics,
-    ...(Array.isArray(dynamicIconics) ? dynamicIconics.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean) : [])
+    ...(Array.isArray(dynamicIconics) ? dynamicIconics.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean) : []),
+    ...(Array.isArray(dynamicCatalog?.places) ? dynamicCatalog.places.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean) : []),
+    ...realPlaces.filter(p => p?.source === 'openai_iconic' || p?.coordinateSource === 'openai_iconic').map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
+  ]
+  const allPriorityRestaurants = coastalIslands ? [] : [
+    ...presetRests,
+    ...(Array.isArray(dynamicCatalog?.restaurants) ? dynamicCatalog.restaurants.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean) : []),
+    ...realRests.filter(r => r?.source === 'openai_iconic' || r?.coordinateSource === 'openai_iconic').map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
   ]
   realPlaces = rankAndFilterTouristAttractions(
     realPlaces.filter(p => !isGenericFacilityName(typeof p === 'string' ? p : p?.name)),
-    presetIconics
+    allPriorityIconics
   )
   realPlaces = mergeCuratedCoastalPlaces(realPlaces, clean)
   realRests = rankAndFilterTouristRestaurants(realRests)
@@ -3105,7 +3163,7 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
       ? { places: [], restaurants: [], hotels: [] }
       : {
           places: allPriorityIconics,
-          restaurants: presetRests,
+          restaurants: allPriorityRestaurants,
           hotels: presetHotels
         },
     // The existing collection above already queries OSM/Photon. The catalog
@@ -3142,7 +3200,7 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
       !isNonTouristFacility(place) &&
       !isUnmappedOrClosedVenue(place?.name || '')
     ),
-    presetIconics
+    allPriorityIconics
   )
 
   const catalogPlaceCandidates = unifiedCatalog.places || []
@@ -3158,6 +3216,15 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
       prioritizedIds.add(match.id || match.candidateId || match.name)
     }
   }
+  for (const rp of realPlaces) {
+    if (rp && (rp.source === 'openai_iconic' || rp.coordinateSource === 'openai_iconic')) {
+      const rpName = typeof rp === 'string' ? rp : rp.name
+      if (rpName && !prioritizedPlaceCandidates.some(c => arePlacesSimilar(c.name || c, rpName))) {
+        prioritizedPlaceCandidates.push(typeof rp === 'string' ? { name: rpName } : rp)
+        prioritizedIds.add(rp.id || rp.candidateId || rpName)
+      }
+    }
+  }
   const cleanPlaceCandidates = [
     ...prioritizedPlaceCandidates,
     ...catalogPlaceCandidates.filter(candidate => !prioritizedIds.has(candidate.id || candidate.candidateId || candidate.name))
@@ -3166,7 +3233,7 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
     ? cleanPlaceCandidates
     : cleanPlaceCandidates.map(candidate => candidate.name).filter(Boolean)
   const cleanHotels = []
-  for (const candidate of (unifiedCatalog.hotels || [])) {
+  for (const candidate of [...(unifiedCatalog.hotels || []), ...realHotels]) {
     const hName = candidate?.name
     if (!hName || isTriviallyGenericHotelName(hName, capitalCity) || isGenericFacilityName(hName) || isUnmappedOrClosedVenue(hName)) {
       continue
@@ -3174,7 +3241,7 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
     if (!cleanHotels.some(existing => arePlacesSimilar(existing.name, hName))) {
       cleanHotels.push({
         ...candidate,
-        desc: candidate.description || `Alojamiento verificado ubicado en ${capitalCity}.`,
+        desc: candidate.description || candidate.desc || `Alojamiento verificado ubicado en ${capitalCity}.`,
         price: candidate.price || '~$75 - $140 USD/noche'
       })
     }
@@ -3182,7 +3249,7 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
   const rankedRests = rankAndFilterTouristRestaurants(unifiedCatalog.restaurants || [])
   const prioritizedRestCandidates = []
   const prioritizedRestIds = new Set()
-  for (const iconicName of presetRests) {
+  for (const iconicName of allPriorityRestaurants) {
     const match = rankedRests.find(candidate =>
       !prioritizedRestIds.has(candidate.id || candidate.candidateId || candidate.name) &&
       arePlacesSimilar(candidate.name, iconicName)
@@ -3190,6 +3257,15 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
     if (match) {
       prioritizedRestCandidates.push(match)
       prioritizedRestIds.add(match.id || match.candidateId || match.name)
+    }
+  }
+  for (const rr of realRests) {
+    if (rr && (rr.source === 'openai_iconic' || rr.coordinateSource === 'openai_iconic')) {
+      const rrName = typeof rr === 'string' ? rr : rr.name
+      if (rrName && !prioritizedRestCandidates.some(c => arePlacesSimilar(c.name || c, rrName))) {
+        prioritizedRestCandidates.push(typeof rr === 'string' ? { name: rrName } : rr)
+        prioritizedRestIds.add(rr.id || rr.candidateId || rrName)
+      }
     }
   }
   const cleanRests = [
@@ -3203,16 +3279,19 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
   }))
 
   const coordinatesMap = {}
-  for (const candidate of unifiedCatalog.all || []) {
+  for (const candidate of [...(unifiedCatalog.all || []), ...realPlaces, ...realRests]) {
     if (candidate?.name && Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude)) {
-      coordinatesMap[candidate.name.toLowerCase().trim()] = {
-        latitude: candidate.latitude,
-        longitude: candidate.longitude,
-        coordinateSource: candidate.coordinateSource,
-        coordinatesVerified: true,
-        sources: candidate.sources || [],
-        placeId: candidate.placeId || candidate.id || '',
-        candidateId: getCandidateId(candidate)
+      const key = candidate.name.toLowerCase().trim()
+      if (!coordinatesMap[key]) {
+        coordinatesMap[key] = {
+          latitude: candidate.latitude,
+          longitude: candidate.longitude,
+          coordinateSource: candidate.coordinateSource || candidate.source || 'openai_iconic',
+          coordinatesVerified: true,
+          sources: candidate.sources || [candidate.source || 'openai_iconic'],
+          placeId: candidate.placeId || candidate.id || '',
+          candidateId: getCandidateId(candidate)
+        }
       }
     }
   }
@@ -3231,22 +3310,36 @@ async function loadRealDestinationCatalog(destName = '', countryName = '', userL
     events: realEvents || []
   }
 
-  const toCache = (unifiedCatalog?.all || []).filter(candidate => candidate.coordinateSource !== 'curated_coastal').map(candidate => ({
-    name: candidate.name,
-    city: capitalCity,
-    latitude: candidate.latitude,
-    longitude: candidate.longitude,
-    address: candidate.address || '',
-    placeId: candidate.placeId || candidate.id || '',
-    source: candidate.coordinateSource || 'dynamic_catalog',
-    category: candidate.entityType === 'restaurant' ? 'restaurant' : (candidate.entityType === 'hotel' ? 'hotel' : 'attraction'),
-    metadata: {
-      desc: candidate.description || '',
-      stars: candidate.stars || '',
-      cuisine: candidate.cuisine || '',
-      tags: candidate.tags || {}
-    }
-  }))
+  const toCacheCandidates = [
+    ...(unifiedCatalog?.all || []),
+    ...cleanPlaceCandidates,
+    ...cleanRests
+  ]
+  const seenCacheNames = new Set()
+  const toCache = toCacheCandidates
+    .filter(candidate => candidate?.name && candidate.coordinateSource !== 'curated_coastal')
+    .filter(candidate => {
+      const k = candidate.name.toLowerCase().trim()
+      if (seenCacheNames.has(k)) return false
+      seenCacheNames.add(k)
+      return true
+    })
+    .map(candidate => ({
+      name: candidate.name,
+      city: capitalCity,
+      latitude: candidate.latitude,
+      longitude: candidate.longitude,
+      address: candidate.address || '',
+      placeId: candidate.placeId || candidate.id || '',
+      source: candidate.coordinateSource || 'dynamic_catalog',
+      category: candidate.entityType === 'restaurant' || candidate.category === 'restaurant' ? 'restaurant' : (candidate.entityType === 'hotel' || candidate.category === 'hotel' ? 'hotel' : 'attraction'),
+      metadata: {
+        desc: candidate.description || '',
+        stars: candidate.stars || '',
+        cuisine: candidate.cuisine || '',
+        tags: candidate.tags || {}
+      }
+    }))
   if (toCache.length > 0) {
     saveCachedPlacesBatch(toCache, clean, 'dynamic_catalog').catch(() => {})
   }
@@ -3770,8 +3863,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             restaurants: (cachedCatalogValue.restaurants || []).filter(place => !isPlaceInDifferentCity(place, destName, known.latitude, known.longitude, [], { allowSameMetroGroup: allowNearbyMunicipalities })),
             hotels: (cachedCatalogValue.hotels || []).filter(place => !isPlaceInDifferentCity(place, destName, known.latitude, known.longitude, [], { allowSameMetroGroup: allowNearbyMunicipalities }))
           } : null
-          const hasSufficientPlaces = (cachedCatalog?.places?.length || 0) >= Math.min(6, minRequiredPlaces)
-          const hasSufficientRests = coastalIslands || (cachedCatalog?.restaurants?.length || 0) >= Math.min(3, minRequiredRests)
+          const hasSufficientPlaces = (cachedCatalog?.places?.length || 0) >= minRequiredPlaces
+          const hasSufficientRests = coastalIslands || (cachedCatalog?.restaurants?.length || 0) >= minRequiredRests
           if (cachedCatalog && hasSufficientPlaces && hasSufficientRests) {
             realCatalog = cachedCatalog
           } else {
@@ -3784,9 +3877,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
                 console.warn('[generateChatResponse] Catalog lookup error:', err.message)
                 return null
               })
-            realCatalog = await resolveWithin(catalogPromise, 5000, null)
+            realCatalog = await resolveWithin(catalogPromise, 8500, null)
             if (!realCatalog) {
-              console.warn('[generateChatResponse] Catalog lookup exceeded the 5-second chat budget.')
+              console.warn('[generateChatResponse] Catalog lookup exceeded chat budget.')
               realCatalog = cachedCatalog || { places: [], restaurants: [], hotels: [] }
             }
             if (cachedCatalog?.places?.length > 0 && (!realCatalog.places || realCatalog.places.length === 0)) {
@@ -7723,6 +7816,210 @@ Formato JSON obligatorio:
   return null
 }
 
+const dynamicCityCatalogCache = new Map()
+
+export async function fetchDynamicCityPlacesAndRestaurants(cityInput, countryInput = '', lat = null, lon = null, minPlaces = 16, minRests = 10) {
+  let city = ''
+  let country = countryInput || ''
+  if (typeof cityInput === 'object' && cityInput !== null) {
+    city = cityInput.city || cityInput.destination || ''
+    country = cityInput.country || countryInput || ''
+  } else if (typeof cityInput === 'string') {
+    city = cityInput
+  }
+  if (!city || !city.trim()) return { places: [], restaurants: [] }
+  const clean = cleanAdministrativeCityName(city).trim()
+  const cacheKey = `dyn_cat_${clean.toLowerCase()}__${(country || '').toLowerCase()}`
+  if (dynamicCityCatalogCache.has(cacheKey)) {
+    const cached = dynamicCityCatalogCache.get(cacheKey)
+    if (cached?.places?.length >= minPlaces && cached?.restaurants?.length >= minRests) {
+      return cached
+    }
+  }
+
+  // Tier 0: Check database / memory places_cache for verified openai_iconic items
+  const [cachedAttractions, cachedRestaurants] = await Promise.all([
+    lookupCachedPlacesForCity(clean, 'attraction').catch(() => []),
+    lookupCachedPlacesForCity(clean, 'restaurant').catch(() => [])
+  ])
+
+  const verifiedCachedPlaces = (cachedAttractions || []).filter(p =>
+    p?.name &&
+    (p.source === 'openai_iconic' || p.coordinateSource === 'openai_iconic') &&
+    !isGenericFacilityName(p.name) &&
+    !isNonTouristFacility({ name: p.name, tags: p.tags }) &&
+    !isFoodOrDrinkEstablishment(p.name) &&
+    !isLowQualityOrFastFoodVenue(p.name, p.tags)
+  )
+
+  const verifiedCachedRests = (cachedRestaurants || []).filter(r =>
+    r?.name &&
+    (r.source === 'openai_iconic' || r.coordinateSource === 'openai_iconic') &&
+    !isGenericFacilityName(r.name) &&
+    !isNonTouristFacility({ name: r.name, tags: r.tags }) &&
+    !isLowQualityOrFastFoodVenue(r.name, r.tags)
+  )
+
+  if (verifiedCachedPlaces.length >= minPlaces && verifiedCachedRests.length >= minRests) {
+    const result = { places: verifiedCachedPlaces, restaurants: verifiedCachedRests }
+    dynamicCityCatalogCache.set(cacheKey, result)
+    return result
+  }
+
+  const apiKey = getActiveLlmKey()
+  const discoveredPlaces = [...verifiedCachedPlaces]
+  const discoveredRests = [...verifiedCachedRests]
+
+  if (apiKey) {
+    try {
+      const response = await fetchOpenAiChatCompletion({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(buildOpenAiPayload({
+          modelConfig: getFastOpenAiModelConfig(),
+          messages: [
+            {
+              role: 'system',
+              content: `Eres un guía turístico profesional de VibeTours con conocimiento enciclopédico de turismo y geografía mundial. Para la ciudad indicada:
+1. "places": Lista entre 16 y 20 lugares turísticos, plazas históricas, monumentos, museos, miradores y paseos más emblemáticos y visitados a nivel mundial o nacional (ordenados por popularidad turística).
+   - PROHIBIDO incluir restaurantes, cafeterías, oficinas administrativas de turismo, lavaderos o urbanizaciones.
+   - Para CADA lugar incluye: name, category ("historic"|"culture"|"nature"|"viewpoint"|"park"), latitude (número flotante GPS real), longitude (número flotante GPS real).
+2. "restaurants": Lista entre 10 y 14 restaurantes tradicionales, auténticos, bodegones, asadores, parrillas o cafés históricos emblemáticos de gastronomía local (imperdibles para un viajero).
+   - ESTRICTAMENTE PROHIBIDO cadenas de comida rápida (Starbucks, McDonald's, KFC, Subway, etc.).
+   - Para CADA uno incluye: name, cuisine, specialty, latitude (número flotante GPS real), longitude (número flotante GPS real).
+Devuelve ÚNICAMENTE un JSON válido con esta estructura:
+{
+  "places": [
+    { "name": "Nombre descriptivo exacto", "category": "historic", "latitude": -34.6037, "longitude": -58.3816 }
+  ],
+  "restaurants": [
+    { "name": "Nombre del restaurante", "cuisine": "tipo de cocina", "specialty": "especialidad", "latitude": -34.6082, "longitude": -58.3786 }
+  ]
+}`
+            },
+            {
+              role: 'user',
+              content: `Ciudad: "${clean}", País: "${country || ''}"${lat && lon ? `, Coordenadas centrales: ${lat}, ${lon}` : ''}. Genera los lugares turísticos más icónicos y restaurantes recomendados con sus coordenadas GPS.`
+            }
+          ],
+          response_format: { type: 'json_object' },
+          reasoning_effort: 'low'
+        })),
+      }, {
+        attempts: 1,
+        timeoutMs: 25000
+      })
+
+      if (response && response.ok) {
+        const json = await response.json()
+        const content = json.choices?.[0]?.message?.content
+        if (content) {
+          const parsed = cleanAndParseJson(content, {})
+          const rawPlaces = Array.isArray(parsed?.places) ? parsed.places : []
+          const rawRests = Array.isArray(parsed?.restaurants) ? parsed.restaurants : []
+
+          for (const p of rawPlaces) {
+            const entry = typeof p === 'string' ? { name: p, category: 'historic' } : p
+            const pName = entry?.name?.trim()
+            if (pName && !isGenericFacilityName(pName) && !isNonTouristFacility({ name: pName }) && !isFoodOrDrinkEstablishment(pName) && !isLowQualityOrFastFoodVenue(pName) && !isUnmappedOrClosedVenue(pName)) {
+              if (!discoveredPlaces.some(existing => arePlacesSimilar(existing.name || existing, pName))) {
+                const numLat = Number(entry.latitude)
+                const numLon = Number(entry.longitude)
+                const hasValidCoords = Number.isFinite(numLat) && Number.isFinite(numLon) && (numLat !== 0 || numLon !== 0)
+                const isWithinMetro = hasValidCoords && (lat == null || lon == null || haversineMeters(lat, lon, numLat, numLon) <= 45000)
+                discoveredPlaces.push({
+                  ...entry,
+                  name: pName,
+                  city: clean,
+                  country: country || '',
+                  address: `${pName}, ${clean}`,
+                  placeId: `openai:${clean.toLowerCase().replace(/\s+/g, '_')}:${pName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                  category: 'attraction',
+                  catalogCategoryEvidence: 'attraction',
+                  catalogNameVerified: true,
+                  source: 'openai_iconic',
+                  coordinateSource: isWithinMetro ? 'openai_iconic' : null,
+                  coordinatesVerified: isWithinMetro,
+                  rawCoordinatesVerified: isWithinMetro,
+                  latitude: isWithinMetro ? numLat : null,
+                  longitude: isWithinMetro ? numLon : null,
+                  tags: {
+                    tourism: 'attraction',
+                    historic: entry.category || 'historic',
+                    name: pName,
+                    city: clean
+                  }
+                })
+              }
+            }
+          }
+
+          for (const r of rawRests) {
+            const entry = typeof r === 'string' ? { name: r } : r
+            const rName = entry?.name?.trim()
+            if (rName && !isGenericFacilityName(rName) && !isNonTouristFacility({ name: rName }) && !isLowQualityOrFastFoodVenue(rName) && !isUnmappedOrClosedVenue(rName)) {
+              if (!discoveredRests.some(existing => arePlacesSimilar(existing.name || existing, rName))) {
+                const numLat = Number(entry.latitude)
+                const numLon = Number(entry.longitude)
+                const hasValidCoords = Number.isFinite(numLat) && Number.isFinite(numLon) && (numLat !== 0 || numLon !== 0)
+                const isWithinMetro = hasValidCoords && (lat == null || lon == null || haversineMeters(lat, lon, numLat, numLon) <= 45000)
+                discoveredRests.push({
+                  ...entry,
+                  name: rName,
+                  city: clean,
+                  country: country || '',
+                  address: `${rName}, ${clean}`,
+                  placeId: `openai:${clean.toLowerCase().replace(/\s+/g, '_')}:${rName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                  category: 'restaurant',
+                  catalogCategoryEvidence: 'restaurant',
+                  catalogNameVerified: true,
+                  source: 'openai_iconic',
+                  coordinateSource: isWithinMetro ? 'openai_iconic' : null,
+                  coordinatesVerified: isWithinMetro,
+                  rawCoordinatesVerified: isWithinMetro,
+                  latitude: isWithinMetro ? numLat : null,
+                  longitude: isWithinMetro ? numLon : null,
+                  tags: {
+                    amenity: 'restaurant',
+                    cuisine: entry.cuisine || 'local',
+                    name: rName,
+                    city: clean
+                  }
+                })
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[fetchDynamicCityPlacesAndRestaurants] OpenAI discovery call failed:', err.message)
+    }
+  }
+
+  // Geocode and verify discovered places and restaurants on OpenStreetMap / Photon in parallel batches
+  const [verifiedPlaces, verifiedRests] = await Promise.all([
+    verifyCatalogEntriesOnOsm(discoveredPlaces, clean, country, Math.max(minPlaces, 18), lat, lon, 'attraction'),
+    verifyCatalogEntriesOnOsm(discoveredRests, clean, country, Math.max(minRests, 12), lat, lon, 'restaurant')
+  ])
+
+  const finalPlaces = verifiedPlaces.length >= 10 ? verifiedPlaces : discoveredPlaces.filter(p => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+  const finalRests = verifiedRests.length >= 6 ? verifiedRests : discoveredRests.filter(r => Number.isFinite(r.latitude) && Number.isFinite(r.longitude))
+
+  // Persist verified items with source 'openai_iconic'
+  saveCachedPlacesBatch(finalPlaces, clean, 'openai_iconic').catch(() => {})
+  saveCachedPlacesBatch(finalRests, clean, 'openai_iconic').catch(() => {})
+
+  const finalResult = {
+    places: finalPlaces.length > 0 ? finalPlaces : discoveredPlaces,
+    restaurants: finalRests.length > 0 ? finalRests : discoveredRests
+  }
+  dynamicCityCatalogCache.set(cacheKey, finalResult)
+  return finalResult
+}
+
 const cityLandmarksCache = new Map()
 
 export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat = null, lon = null, options = 3) {
@@ -7745,15 +8042,25 @@ export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat
     }
   }
 
-  // Tier 0: Check database / memory places_cache first in 0 ms
+  // Tier 0: Check database / memory places_cache first in 0 ms, only accepting verified openai_iconic items
   const cachedPlaces = await lookupCachedPlacesForCity(clean, 'attraction').catch(() => [])
-  const mappedCached = (Array.isArray(cachedPlaces) ? cachedPlaces : []).map(p => ({
-    name: p.name,
-    category: p.category || 'historic',
-    latitude: p.latitude,
-    longitude: p.longitude,
-    address: p.address || ''
-  }))
+  const mappedCached = (Array.isArray(cachedPlaces) ? cachedPlaces : [])
+    .filter(p =>
+      p?.name &&
+      (p.source === 'openai_iconic' || p.coordinateSource === 'openai_iconic' || p.confidence >= 0.9) &&
+      !isGenericFacilityName(p.name) &&
+      !isNonTouristFacility({ name: p.name, tags: p.tags }) &&
+      !isFoodOrDrinkEstablishment(p.name) &&
+      !isLowQualityOrFastFoodVenue(p.name, p.tags)
+    )
+    .map(p => ({
+      name: p.name,
+      category: p.category || 'historic',
+      latitude: p.latitude,
+      longitude: p.longitude,
+      address: p.address || '',
+      source: p.source || p.coordinateSource || 'cache'
+    }))
 
   if (mappedCached.length >= minRequired) {
     cityLandmarksCache.set(cacheKey, mappedCached)
@@ -7770,6 +8077,7 @@ export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify(buildOpenAiPayload({
+          modelConfig: getFastOpenAiModelConfig(),
           messages: [
             {
               role: 'system',
@@ -7791,12 +8099,11 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
             }
           ],
           response_format: { type: 'json_object' },
-          temperature: 0.3,
-          reasoning_effort: 'none'
+          reasoning_effort: 'low'
         })),
       }, {
         attempts: 1,
-        timeoutMs: 4500
+        timeoutMs: 10000
       })
 
       if (response && response.ok) {

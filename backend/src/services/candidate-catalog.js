@@ -31,7 +31,11 @@ const TRUSTED_SOURCES = new Set([
   'cache_memory',
   'cache_db',
   'wikipedia-geosearch',
-  'curated_coastal'
+  'curated_coastal',
+  'ai_address',
+  'openai_iconic',
+  'ai_iconic',
+  'dynamic_catalog'
 ])
 
 const CATEGORY_LIMITS = Object.freeze({
@@ -72,7 +76,8 @@ const ATTRACTION_TYPES = new Set([
   'monument', 'memorial', 'ruins', 'castle', 'archaeological_site', 'church',
   'cathedral', 'city_gate', 'fort', 'heritage', 'park', 'garden', 'nature_reserve',
   'beach', 'island', 'islet', 'national_park', 'arts_centre', 'marketplace',
-  'theatre', 'ferry_terminal', 'square', 'waterfall', 'hot_spring', 'volcano', 'peak'
+  'theatre', 'ferry_terminal', 'square', 'waterfall', 'hot_spring', 'volcano', 'peak',
+  'historic', 'culture', 'sight', 'landmark', 'neighborhood'
 ])
 
 const RESTAURANT_TYPES = new Set([
@@ -151,6 +156,9 @@ function providerSignals(candidate) {
     if (/\b(castillo|fuerte|museo|parque|plaza|mirador|monumento|monument|playa|beach|catedral|iglesia|basilica|santuario|teatro|jardin|isla|fortaleza|palacio|patrimonio|bioparque|ecoparque|reserva|laguna|nevado|termales|viaducto)\b/.test(normalizeIdentityText(candidate?.name))) {
       add(attraction, 'name:tourist_landmark')
     }
+    if (candidate?.coordinateSource === 'openai_iconic' || candidate?.coordinateSource === 'ai_address' || candidate?.source === 'openai_iconic' || candidate?.source === 'ai_iconic') {
+      add(attraction, 'source:openai_iconic')
+    }
   }
 
   if (RESTAURANT_TYPES.has(type)) add(restaurant, `type:${type}`)
@@ -163,6 +171,11 @@ function providerSignals(candidate) {
     add(restaurant, `mapbox:${query}`)
   }
   if (isFoodByNameOrTags) add(restaurant, 'name:food_or_drink')
+  if (candidate?.coordinateSource === 'openai_iconic' || candidate?.coordinateSource === 'ai_address' || candidate?.source === 'openai_iconic' || candidate?.source === 'ai_iconic') {
+    if (candidate?.category === 'restaurant' || isFoodByNameOrTags) {
+      add(restaurant, 'source:openai_iconic')
+    }
+  }
 
   if (HOTEL_TYPES.has(type)) add(hotel, `type:${type}`)
   if (HOTEL_TYPES.has(providerCategory)) add(hotel, `category:${providerCategory}`)
@@ -279,7 +292,11 @@ export function validateCandidateIdentityAndCategory(candidate, {
 function normalizeSource(value, fallback = '') {
   const source = String(value || fallback || '').trim().toLowerCase()
   if (!source) return ''
-  if (source.startsWith('ai_address:')) return source.slice('ai_address:'.length)
+  if (source.startsWith('ai_address:')) return 'ai_address'
+  if (source === 'ai_address') return 'ai_address'
+  if (source.startsWith('openai_iconic')) return 'openai_iconic'
+  if (source === 'openai_iconic' || source === 'ai_iconic') return source
+  if (source.startsWith('dynamic_catalog')) return 'dynamic_catalog'
   if (source.startsWith('cache_db:')) return 'cache_db'
   if (source.startsWith('cache_')) return source
   return source.split(':')[0]
